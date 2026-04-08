@@ -4,6 +4,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TetosModule } from './tetos/teto.module';
+import { UserModule } from './user/user.module';
+import { DiretoriaModule } from './diretoria/diretoria.module';
+import { OmeModule } from './ome/ome.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -25,6 +29,14 @@ import { TetosModule } from './tetos/teto.module';
     }),
 
     TetosModule,
+
+    UserModule,
+
+    DiretoriaModule,
+
+    OmeModule,
+
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
