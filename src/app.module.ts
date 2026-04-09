@@ -8,6 +8,7 @@ import { UserModule } from './user/user.module';
 import { DiretoriaModule } from './diretoria/diretoria.module';
 import { OmeModule } from './ome/ome.module';
 import { AuthModule } from './auth/auth.module';
+import { DistribuicaoModule } from './distribuicao/distribuicao.module';
 
 @Module({
   imports: [
@@ -37,6 +38,8 @@ import { AuthModule } from './auth/auth.module';
     OmeModule,
 
     AuthModule,
+
+    DistribuicaoModule,
   ],
   controllers: [AppController],
   providers: [AppService],
