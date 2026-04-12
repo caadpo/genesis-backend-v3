@@ -12,6 +12,11 @@ export class CreateTetosTable1775441760604 implements MigrationInterface {
             isPrimary: true,
           },
           {
+            name: 'imagem_url',
+            type: 'varchar',
+            isNullable: true,
+          },
+          {
             name: 'sistema',
             type: 'enum',
             enum: ['PJES', 'DIARIAS'],
@@ -33,16 +38,14 @@ export class CreateTetosTable1775441760604 implements MigrationInterface {
             scale: 2,
           },
           {
-            name: 'valor_oficial',
+            name: 'ttctof',
             type: 'numeric',
-            precision: 10,
-            scale: 2,
+            isNullable: false,
           },
           {
-            name: 'valor_praca',
+            name: 'ttctprc',
             type: 'numeric',
-            precision: 10,
-            scale: 2,
+            isNullable: false,
           },
           {
             name: 'data_inicio',

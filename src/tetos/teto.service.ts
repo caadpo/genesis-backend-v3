@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { NotFoundException } from '@nestjs/common';
-import { Teto } from './entities/teto.entity';
+import { Sistema, Teto } from './entities/teto.entity';
 
 @Injectable()
 export class TetoService {
@@ -16,8 +16,33 @@ export class TetoService {
     return this.tetoRepository.save(novoTeto);
   }
 
-  findAll(): Promise<Teto[]> {
-    return this.tetoRepository.find();
+  async findAll(sistema?: string, mes?: string, ano?: string): Promise<Teto[]> {
+    const qb = this.tetoRepository.createQueryBuilder('teto');
+
+    if (sistema) {
+      qb.andWhere('teto.sistema = :sistema', {
+        sistema: sistema as Sistema,
+      });
+    }
+
+    // 🔥 Se vier mês/ano → filtra pelo período do mês
+    if (mes && ano) {
+      const mesNum = Number(mes);
+      const anoNum = Number(ano);
+
+      const inicioMes = new Date(anoNum, mesNum - 1, 1);
+      const fimMes = new Date(anoNum, mesNum, 0);
+
+      qb.andWhere(
+        `
+        teto.data_inicio <= :fimMes
+        AND teto.data_fim >= :inicioMes
+        `,
+        { inicioMes, fimMes },
+      );
+    }
+
+    return qb.orderBy('teto.nome_verba', 'ASC').getMany();
   }
 
   async findOne(id: number): Promise<Teto> {

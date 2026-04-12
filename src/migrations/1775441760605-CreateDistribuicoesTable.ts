@@ -27,18 +27,12 @@ export class CreateDistribuicaoTable1775441760605 implements MigrationInterface 
             isNullable: false,
           },
           {
-            name: 'qtd_oficiais',
+            name: 'qtd_dist_of',
             type: 'int',
           },
           {
-            name: 'qtd_pracas',
+            name: 'qtd_dist_prc',
             type: 'int',
-          },
-          {
-            name: 'valor_total',
-            type: 'numeric',
-            precision: 14,
-            scale: 2,
           },
           {
             name: 'created_at',

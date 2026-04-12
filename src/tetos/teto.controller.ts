@@ -7,6 +7,7 @@ import {
   Patch,
   Delete,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
 import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
@@ -37,8 +38,12 @@ export class TetosController {
     UserType.TECNICO,
     UserType.MASTER,
   )
-  findAll(): Promise<Teto[]> {
-    return this.tetoService.findAll();
+  findAll(
+    @Query('sistema') sistema?: string,
+    @Query('mes') mes?: string,
+    @Query('ano') ano?: string,
+  ): Promise<Teto[]> {
+    return this.tetoService.findAll(sistema, mes, ano);
   }
 
   @Get(':id')

@@ -9,6 +9,7 @@ import {
   Delete,
   ParseIntPipe,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
@@ -31,7 +32,11 @@ export class DistribuicaoController {
   }
 
   @Get()
-  findAll() {
+  findAll(@Query('tetoId') tetoId?: string) {
+    if (tetoId) {
+      return this.service.findByTeto(Number(tetoId));
+    }
+
     return this.service.findAll();
   }
 

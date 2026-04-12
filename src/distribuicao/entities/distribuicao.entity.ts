@@ -25,13 +25,10 @@ export class Distribuicao {
   diretoria: DiretoriaEntity;
 
   @Column({ type: 'int' })
-  qtd_oficiais: number;
+  qtd_dist_of: number;
 
   @Column({ type: 'int' })
-  qtd_pracas: number;
-
-  @Column({ type: 'numeric', precision: 14, scale: 2 })
-  valor_total: number;
+  qtd_dist_prc: number;
 
   @CreateDateColumn({ type: 'timestamp' })
   created_at: Date;

@@ -22,10 +22,10 @@ export class CreateTetoDto {
   valor_total: number;
 
   @IsNumber()
-  valor_oficial: number;
+  ttctof: number;
 
   @IsNumber()
-  valor_praca: number;
+  ttctprc: number;
 
   @IsDate()
   data_inicio: Date;

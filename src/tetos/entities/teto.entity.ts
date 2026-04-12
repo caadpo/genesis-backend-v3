@@ -21,6 +21,9 @@ export class Teto {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ name: 'imagem_url', nullable: true })
+  imagemUrl: string;
+
   @Column({ type: 'enum', enum: Sistema })
   sistema: Sistema;
 
@@ -33,11 +36,11 @@ export class Teto {
   @Column({ type: 'numeric', precision: 14, scale: 2 })
   valor_total: number;
 
-  @Column({ type: 'numeric', precision: 10, scale: 2 })
-  valor_oficial: number;
+  @Column({ type: 'int' })
+  ttctof: number;
 
-  @Column({ type: 'numeric', precision: 10, scale: 2 })
-  valor_praca: number;
+  @Column({ type: 'int' })
+  ttctprc: number;
 
   @Column({ type: 'date' })
   data_inicio: string;

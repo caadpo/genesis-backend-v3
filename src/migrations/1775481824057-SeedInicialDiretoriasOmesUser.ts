@@ -49,6 +49,108 @@ export class SeedInicialDiretoriasOmesUser1775481824057 implements MigrationInte
         1,
       ],
     );
+
+    // 🔹 4) TETOS INICIAIS (PJES - ABRIL/2026)
+    await queryRunner.query(`
+INSERT INTO tetos
+(
+  imagem_url,
+  sistema,
+  nome_verba,
+  cod_verba,
+  valor_total,
+  ttctof,
+  ttctprc,
+  data_inicio,
+  data_fim,
+  tipo_periodo
+)
+VALUES
+(
+  '/logo_dpo.png',
+  'PJES',
+  'GOVERNO',
+  '247',
+  50000.00,
+  100,
+  100,
+  '2026-04-01',
+  '2026-04-30',
+  'MENSAL'
+),
+(
+  '/pe_logo.png',
+  'PJES',
+  'P ESCOLAR',
+  '263',
+  250000.00,
+  500,
+  500,
+  '2026-04-01',
+  '2026-04-30',
+  'MENSAL'
+),
+(
+  '/mobi_logo.png',
+  'PJES',
+  'CTM BRT',
+  '255',
+  50000.00,
+  100,
+  100,
+  '2026-04-01',
+  '2026-04-30',
+  'MENSAL'
+),
+(
+  '/brasil_logo.png',
+  'PJES',
+  'FEDERAL',
+  '250',
+  12500.00,
+  25,
+  25,
+  '2026-04-01',
+  '2026-04-30',
+  'MENSAL'
+),
+(
+  '/alepe_logo.png',
+  'PJES',
+  'ALEPE',
+  '270',
+  5000.00,
+  10,
+  10,
+  '2026-04-01',
+  '2026-04-30',
+  'MENSAL'
+),
+(
+  '/tjpe_logo.png',
+  'PJES',
+  'TJPE',
+  '290',
+  25000.00,
+  50,
+  50,
+  '2026-04-01',
+  '2026-04-30',
+  'MENSAL'
+),
+(
+  '/sds_logo.png',
+  'PJES',
+  'SDS',
+  '299',
+  100000.00,
+  200,
+  200,
+  '2026-04-01',
+  '2026-04-30',
+  'MENSAL'
+);
+    `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
@@ -57,5 +159,10 @@ export class SeedInicialDiretoriasOmesUser1775481824057 implements MigrationInte
     );
     await queryRunner.query(`DELETE FROM ome`);
     await queryRunner.query(`DELETE FROM diretoria`);
+    await queryRunner.query(`
+  DELETE FROM tetos
+  WHERE data_inicio = '2026-04-01'
+  AND sistema = 'PJES';
+`);
   }
 }

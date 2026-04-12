@@ -9,11 +9,8 @@ export class CreateDistribuicaoDto {
   diretoria_id: number;
 
   @IsInt()
-  qtd_oficiais: number;
+  qtd_dist_of: number;
 
   @IsInt()
-  qtd_pracas: number;
-
-  @IsNumber()
-  valor_total: number;
+  qtd_dist_prc: number;
 }

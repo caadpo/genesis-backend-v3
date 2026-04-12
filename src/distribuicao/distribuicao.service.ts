@@ -33,9 +33,8 @@ export class DistribuicaoService {
     const distribuicao = this.distribuicaoRepo.create({
       teto,
       diretoria,
-      qtd_oficiais: dto.qtd_oficiais,
-      qtd_pracas: dto.qtd_pracas,
-      valor_total: dto.valor_total,
+      qtd_dist_of: dto.qtd_dist_of,
+      qtd_dist_prc: dto.qtd_dist_prc,
     });
 
     return this.distribuicaoRepo.save(distribuicao);
@@ -43,6 +42,15 @@ export class DistribuicaoService {
 
   findAll(): Promise<Distribuicao[]> {
     return this.distribuicaoRepo.find({
+      relations: ['teto', 'diretoria'],
+    });
+  }
+
+  async findByTeto(tetoId: number): Promise<Distribuicao[]> {
+    return this.distribuicaoRepo.find({
+      where: {
+        teto: { id: tetoId },
+      },
       relations: ['teto', 'diretoria'],
     });
   }
@@ -58,8 +66,29 @@ export class DistribuicaoService {
   }
 
   async update(id: number, dto: Partial<CreateDistribuicaoDto>) {
-    await this.distribuicaoRepo.update(id, dto);
-    return this.findOne(id);
+    const distribuicao = await this.findOne(id);
+
+    if (dto.teto_id) {
+      const teto = await this.tetoRepo.findOneBy({ id: dto.teto_id });
+      distribuicao.teto = teto!;
+    }
+
+    if (dto.diretoria_id) {
+      const diretoria = await this.diretoriaRepo.findOneBy({
+        id: dto.diretoria_id,
+      });
+      distribuicao.diretoria = diretoria!;
+    }
+
+    if (dto.qtd_dist_of !== undefined) {
+      distribuicao.qtd_dist_of = dto.qtd_dist_of;
+    }
+
+    if (dto.qtd_dist_prc !== undefined) {
+      distribuicao.qtd_dist_prc = dto.qtd_dist_prc;
+    }
+
+    return this.distribuicaoRepo.save(distribuicao);
   }
 
   async remove(id: number) {
