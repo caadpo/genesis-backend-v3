@@ -9,6 +9,8 @@ import { DiretoriaModule } from './diretoria/diretoria.module';
 import { OmeModule } from './ome/ome.module';
 import { AuthModule } from './auth/auth.module';
 import { DistribuicaoModule } from './distribuicao/distribuicao.module';
+import { EventoModule } from './evento/evento.module';
+import { OperacaoModule } from './operacao/operacao.module';
 
 @Module({
   imports: [
@@ -30,16 +32,13 @@ import { DistribuicaoModule } from './distribuicao/distribuicao.module';
     }),
 
     TetosModule,
-
     UserModule,
-
     DiretoriaModule,
-
     OmeModule,
-
     AuthModule,
-
     DistribuicaoModule,
+    EventoModule,
+    OperacaoModule,
   ],
   controllers: [AppController],
   providers: [AppService],

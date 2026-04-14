@@ -7,6 +7,8 @@ import { Distribuicao } from './entities/distribuicao.entity';
 import { Teto } from 'src/tetos/entities/teto.entity';
 import { CreateDistribuicaoDto } from './dtos/create-distribuicao.dto';
 import { DiretoriaEntity } from 'src/diretoria/entities/diretoria.entity';
+import { ReturnDistribuicaoResumoDto } from './dtos/return-distribuicao.dto';
+import { BadRequestException } from '@nestjs/common';
 
 @Injectable()
 export class DistribuicaoService {
@@ -21,6 +23,48 @@ export class DistribuicaoService {
     private readonly diretoriaRepo: Repository<DiretoriaEntity>,
   ) {}
 
+  private async getResumoTeto(
+    tetoId: number,
+  ): Promise<ReturnDistribuicaoResumoDto> {
+    const result = await this.distribuicaoRepo
+      .createQueryBuilder('d')
+      .select('COALESCE(SUM(d.qtd_dist_of), 0)', 'soma_of')
+      .addSelect('COALESCE(SUM(d.qtd_dist_prc), 0)', 'soma_prc')
+      .where('d.teto_id = :tetoId', { tetoId })
+      .getRawOne();
+
+    const teto = await this.tetoRepo.findOneBy({ id: tetoId });
+
+    return {
+      soma_of: Number(result.soma_of),
+      soma_prc: Number(result.soma_prc),
+      limite_of: Number(teto!.ttctof),
+      limite_prc: Number(teto!.ttctprc),
+    };
+  }
+
+  private async getResumoTetoParaUpdate(
+    tetoId: number,
+    distribuicaoId: number,
+  ): Promise<ReturnDistribuicaoResumoDto> {
+    const result = await this.distribuicaoRepo
+      .createQueryBuilder('d')
+      .select('COALESCE(SUM(d.qtd_dist_of), 0)', 'soma_of')
+      .addSelect('COALESCE(SUM(d.qtd_dist_prc), 0)', 'soma_prc')
+      .where('d.teto_id = :tetoId', { tetoId })
+      .andWhere('d.id != :id', { id: distribuicaoId })
+      .getRawOne();
+
+    const teto = await this.tetoRepo.findOneBy({ id: tetoId });
+
+    return {
+      soma_of: Number(result.soma_of),
+      soma_prc: Number(result.soma_prc),
+      limite_of: Number(teto!.ttctof),
+      limite_prc: Number(teto!.ttctprc),
+    };
+  }
+
   async create(dto: CreateDistribuicaoDto): Promise<Distribuicao> {
     const teto = await this.tetoRepo.findOneBy({ id: dto.teto_id });
     if (!teto) throw new NotFoundException('Teto não encontrado');
@@ -29,6 +73,20 @@ export class DistribuicaoService {
       id: dto.diretoria_id,
     });
     if (!diretoria) throw new NotFoundException('Diretoria não encontrada');
+
+    const resumo = await this.getResumoTeto(dto.teto_id);
+
+    if (resumo.soma_of + dto.qtd_dist_of > resumo.limite_of) {
+      throw new BadRequestException(
+        'Quantidade OF ultrapassa o teto disponível',
+      );
+    }
+
+    if (resumo.soma_prc + dto.qtd_dist_prc > resumo.limite_prc) {
+      throw new BadRequestException(
+        'Quantidade PRC ultrapassa o teto disponível',
+      );
+    }
 
     const distribuicao = this.distribuicaoRepo.create({
       teto,
@@ -86,6 +144,23 @@ export class DistribuicaoService {
 
     if (dto.qtd_dist_prc !== undefined) {
       distribuicao.qtd_dist_prc = dto.qtd_dist_prc;
+    }
+
+    const resumo = await this.getResumoTetoParaUpdate(distribuicao.teto.id, id);
+
+    const novoOf = dto.qtd_dist_of ?? distribuicao.qtd_dist_of;
+    const novoPrc = dto.qtd_dist_prc ?? distribuicao.qtd_dist_prc;
+
+    if (resumo.soma_of + novoOf > resumo.limite_of) {
+      throw new BadRequestException(
+        'Quantidade OF ultrapassa o teto disponível',
+      );
+    }
+
+    if (resumo.soma_prc + novoPrc > resumo.limite_prc) {
+      throw new BadRequestException(
+        'Quantidade PRC ultrapassa o teto disponível',
+      );
     }
 
     return this.distribuicaoRepo.save(distribuicao);
