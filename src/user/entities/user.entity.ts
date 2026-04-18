@@ -5,16 +5,19 @@ import {
   Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
-  OneToMany,
   ManyToOne,
   JoinColumn,
+  OneToOne,
 } from 'typeorm';
 import { UserType } from '../enum/user-type.enum';
 import { OmeEntity } from 'src/ome/entities/ome.entity';
+import { ContaEntity } from 'src/conta/entities/conta.entity';
 
 @Entity({ name: 'user' })
 @Index(['loginSei'], { unique: true })
 @Index(['mat'], { unique: true })
+@Index(['cpf'], { unique: true })
+@Index(['nunfunc'], { unique: true })
 export class UserEntity {
   @PrimaryGeneratedColumn('rowid')
   id: number;
@@ -46,8 +49,11 @@ export class UserEntity {
   @Column({ name: 'phone' })
   phone: string;
 
-  @Column({ name: 'funcao', nullable: false })
-  funcao: string;
+  @Column({ name: 'cpf', length: 11 })
+  cpf: string;
+
+  @Column({ name: 'nunfunc', length: 10 })
+  nunfunc: string;
 
   // 🔹 NÍVEL DO USUÁRIO (hierarquia)
   @Column({
@@ -67,4 +73,7 @@ export class UserEntity {
   @ManyToOne(() => OmeEntity, (ome) => ome.users)
   @JoinColumn({ name: 'omeid', referencedColumnName: 'id' })
   ome?: OmeEntity;
+
+  @OneToOne(() => ContaEntity, (conta) => conta.usuario)
+  conta: ContaEntity;
 }

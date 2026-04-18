@@ -31,9 +31,9 @@ export class SeedInicialDiretoriasOmesUser1775481824057 implements MigrationInte
     await queryRunner.query(
       `
       INSERT INTO "user"
-      (loginsei, password, type_user, pg, mat, ng, tipo, funcao, phone, imagem_url, omeid)
+      (loginsei, password, type_user, pg, mat, ng, tipo, phone, imagem_url, cpf, nunfunc, omeid)
       VALUES
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
       `,
       [
         'emerson.francisco1',
@@ -43,9 +43,10 @@ export class SeedInicialDiretoriasOmesUser1775481824057 implements MigrationInte
         1157590,
         'Francisco',
         'P',
-        'Sargenteante',
         '(81)98685-4814',
         '/1157590.png',
+        '08286667417',
+        '3392503',
         1,
       ],
     );

@@ -7,6 +7,7 @@ import {
   Put,
   Delete,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UserEntity } from './entities/user.entity';
@@ -16,6 +17,7 @@ import { Roles } from 'src/decorators/roles.decorator';
 import { UserType } from './enum/user-type.enum';
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/guards/roles.guard';
+import { UserSearchDto } from './dtos/user-search.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users') // ou 'tetos'
@@ -26,6 +28,11 @@ export class UserController {
   @Roles(UserType.AUXILIAR, UserType.TECNICO, UserType.MASTER)
   async createUser(@Body() dto: CreateUserDto): Promise<UserEntity> {
     return this.userService.createUser(dto);
+  }
+
+  @Get('search')
+  async searchUser(@Query('q') q: string): Promise<UserSearchDto | null> {
+    return this.userService.findByMatOrNomeGuerra(q);
   }
 
   @Get(':id')

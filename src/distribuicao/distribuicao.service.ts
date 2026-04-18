@@ -91,6 +91,7 @@ export class DistribuicaoService {
     const distribuicao = this.distribuicaoRepo.create({
       teto,
       diretoria,
+      nome_dist: dto.nome_dist,
       qtd_dist_of: dto.qtd_dist_of,
       qtd_dist_prc: dto.qtd_dist_prc,
     });
@@ -136,6 +137,10 @@ export class DistribuicaoService {
         id: dto.diretoria_id,
       });
       distribuicao.diretoria = diretoria!;
+    }
+
+    if (dto.nome_dist !== undefined) {
+      distribuicao.nome_dist = dto.nome_dist;
     }
 
     if (dto.qtd_dist_of !== undefined) {

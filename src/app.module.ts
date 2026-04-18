@@ -11,6 +11,7 @@ import { AuthModule } from './auth/auth.module';
 import { DistribuicaoModule } from './distribuicao/distribuicao.module';
 import { EventoModule } from './evento/evento.module';
 import { OperacaoModule } from './operacao/operacao.module';
+import { ContaModule } from './conta/conta.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { OperacaoModule } from './operacao/operacao.module';
     DistribuicaoModule,
     EventoModule,
     OperacaoModule,
+    ContaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

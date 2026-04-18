@@ -24,6 +24,9 @@ export class Distribuicao {
   @JoinColumn({ name: 'diretoria_id' })
   diretoria: DiretoriaEntity;
 
+  @Column({ type: 'varchar', length: 100 })
+  nome_dist: string;
+
   @Column({ type: 'int' })
   qtd_dist_of: number;
 

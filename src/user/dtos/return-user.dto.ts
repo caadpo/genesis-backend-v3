@@ -11,7 +11,8 @@ export class ReturnUserDto {
   mat: number;
   nomeGuerra: string;
   tipo: string;
-  funcao: string;
+  cpf: string;
+  nunfunc: string;
   typeUser: UserType;
   ome?: ReturnOmeDto;
 
@@ -25,7 +26,8 @@ export class ReturnUserDto {
     this.mat = userEntity.mat;
     this.nomeGuerra = userEntity.nomeGuerra;
     this.tipo = userEntity.tipo;
-    this.funcao = userEntity.funcao;
+    this.cpf = userEntity.cpf;
+    this.nunfunc = userEntity.nunfunc;
     this.typeUser = userEntity.typeUser;
 
     this.ome = userEntity.ome ? new ReturnOmeDto(userEntity.ome) : undefined;

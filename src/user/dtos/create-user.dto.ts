@@ -37,7 +37,11 @@ export class CreateUserDto {
 
   @IsString()
   @IsNotEmpty()
-  funcao: string;
+  cpf: string;
+
+  @IsString()
+  @IsNotEmpty()
+  nunfunc: string;
 
   @IsOptional()
   @IsString()

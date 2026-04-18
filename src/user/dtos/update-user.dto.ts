@@ -32,7 +32,11 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsString()
-  funcao?: string;
+  cpf?: string;
+
+  @IsOptional()
+  @IsString()
+  nunfunc?: string;
 
   @IsOptional()
   @IsString()

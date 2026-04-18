@@ -1,5 +1,5 @@
 // src/distribuicao/dtos/create-distribuicao.dto.ts
-import { IsInt, IsNumber } from 'class-validator';
+import { IsInt, IsNotEmpty, IsNumber, IsString } from 'class-validator';
 
 export class CreateDistribuicaoDto {
   @IsInt()
@@ -7,6 +7,10 @@ export class CreateDistribuicaoDto {
 
   @IsInt()
   diretoria_id: number;
+
+  @IsString()
+  @IsNotEmpty()
+  nome_dist: string;
 
   @IsInt()
   qtd_dist_of: number;

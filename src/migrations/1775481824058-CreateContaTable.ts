@@ -3,13 +3,14 @@ import {
   QueryRunner,
   Table,
   TableForeignKey,
+  TableUnique,
 } from 'typeorm';
 
-export class CreateDistribuicaoTable1775441760605 implements MigrationInterface {
+export class CreateContaTable1775481824058 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.createTable(
       new Table({
-        name: 'distribuicao',
+        name: 'conta',
         columns: [
           {
             name: 'id',
@@ -17,29 +18,27 @@ export class CreateDistribuicaoTable1775441760605 implements MigrationInterface 
             isPrimary: true,
           },
           {
-            name: 'teto_id',
-            type: 'int',
+            name: 'usuario_id',
+            type: 'integer',
             isNullable: false,
           },
           {
-            name: 'diretoria_id',
-            type: 'int',
-            isNullable: false,
-          },
-
-          {
-            name: 'nome_dist',
+            name: 'banco',
             type: 'varchar',
+            length: '120',
             isNullable: false,
           },
-
           {
-            name: 'qtd_dist_of',
-            type: 'int',
+            name: 'agencia',
+            type: 'varchar',
+            length: '20',
+            isNullable: false,
           },
           {
-            name: 'qtd_dist_prc',
-            type: 'int',
+            name: 'conta',
+            type: 'varchar',
+            length: '30',
+            isNullable: false,
           },
           {
             name: 'created_at',
@@ -50,29 +49,29 @@ export class CreateDistribuicaoTable1775441760605 implements MigrationInterface 
             name: 'updated_at',
             type: 'timestamp',
             default: 'now()',
-            onUpdate: 'CURRENT_TIMESTAMP',
           },
+        ],
+        uniques: [
+          // 🔒 1 CONTA POR USUÁRIO
+          new TableUnique({
+            name: 'uq_conta_usuario',
+            columnNames: ['usuario_id'],
+          }),
+
+          // 🔒 A MESMA CONTA NÃO PODE EXISTIR PARA OUTRO USUÁRIO
+          new TableUnique({
+            name: 'uq_conta_dados',
+            columnNames: ['banco', 'agencia', 'conta'],
+          }),
         ],
       }),
     );
 
-    // FK → TETOS
     await queryRunner.createForeignKey(
-      'distribuicao',
+      'conta',
       new TableForeignKey({
-        columnNames: ['teto_id'],
-        referencedTableName: 'tetos',
-        referencedColumnNames: ['id'],
-        onDelete: 'CASCADE',
-      }),
-    );
-
-    // FK → DIRETORIAS
-    await queryRunner.createForeignKey(
-      'distribuicao',
-      new TableForeignKey({
-        columnNames: ['diretoria_id'],
-        referencedTableName: 'diretoria',
+        columnNames: ['usuario_id'],
+        referencedTableName: 'user',
         referencedColumnNames: ['id'],
         onDelete: 'CASCADE',
       }),
@@ -80,6 +79,6 @@ export class CreateDistribuicaoTable1775441760605 implements MigrationInterface 
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.dropTable('distribuicao');
+    await queryRunner.dropTable('conta');
   }
 }
