@@ -25,6 +25,7 @@ export class CreateUserTable1775481824056 implements MigrationInterface {
 
           { name: 'cpf', type: 'varchar', length: '11', isNullable: false },
           { name: 'nunfunc', type: 'varchar', length: '10', isNullable: false },
+          { name: 'nunvinc', type: 'varchar', length: '10', isNullable: false },
 
           { name: 'phone', type: 'varchar', isNullable: true },
           { name: 'omeid', type: 'integer', isNullable: false },

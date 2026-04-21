@@ -1,5 +1,6 @@
 import { ReturnOmeDto } from 'src/ome/dtos/return-ome.dto';
 import { UserType } from '../enum/user-type.enum';
+import { ReturnContaDto } from 'src/conta/dtos/return-conta.dto';
 
 export class ReturnUserDto {
   id: number;
@@ -13,8 +14,10 @@ export class ReturnUserDto {
   tipo: string;
   cpf: string;
   nunfunc: string;
+  nunvinc: string;
   typeUser: UserType;
   ome?: ReturnOmeDto;
+  conta?: ReturnContaDto;
 
   constructor(userEntity: any) {
     this.id = userEntity.id;
@@ -28,8 +31,12 @@ export class ReturnUserDto {
     this.tipo = userEntity.tipo;
     this.cpf = userEntity.cpf;
     this.nunfunc = userEntity.nunfunc;
+    this.nunvinc = userEntity.nunvinc;
     this.typeUser = userEntity.typeUser;
 
     this.ome = userEntity.ome ? new ReturnOmeDto(userEntity.ome) : undefined;
+    this.conta = userEntity.conta
+      ? new ReturnContaDto(userEntity.conta)
+      : undefined;
   }
 }

@@ -12,6 +12,7 @@ import { DistribuicaoModule } from './distribuicao/distribuicao.module';
 import { EventoModule } from './evento/evento.module';
 import { OperacaoModule } from './operacao/operacao.module';
 import { ContaModule } from './conta/conta.module';
+import { DadossgpModule } from './dadossgp/dadossgp.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { ContaModule } from './conta/conta.module';
     EventoModule,
     OperacaoModule,
     ContaModule,
+    DadossgpModule,
   ],
   controllers: [AppController],
   providers: [AppService],

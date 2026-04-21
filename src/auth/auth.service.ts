@@ -18,6 +18,7 @@ export class AuthService {
 
   async login(loginDto: LoginDto): Promise<ReturnLogin> {
     const user = await this.userService.findUserByLoginSei(loginDto.loginSei);
+    console.log('USER VINDO DO BANCO:', JSON.stringify(user, null, 2));
 
     if (!user) {
       throw new UnauthorizedException('Login ou senha inválidos');

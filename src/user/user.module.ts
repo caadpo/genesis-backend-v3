@@ -6,9 +6,17 @@ import { UserController } from './user.controller';
 import { UserEntity } from './entities/user.entity';
 import { OmeEntity } from 'src/ome/entities/ome.entity';
 import { ContaEntity } from 'src/conta/entities/conta.entity';
+import { DadosSgpEntity } from 'src/dadossgp/entities/dadossgp.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([UserEntity, OmeEntity, ContaEntity])],
+  imports: [
+    TypeOrmModule.forFeature([
+      UserEntity,
+      OmeEntity,
+      DadosSgpEntity,
+      ContaEntity,
+    ]),
+  ],
   providers: [UserService],
   controllers: [UserController],
   exports: [UserService],

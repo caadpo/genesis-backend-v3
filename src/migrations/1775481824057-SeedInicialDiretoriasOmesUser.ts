@@ -26,27 +26,28 @@ export class SeedInicialDiretoriasOmesUser1775481824057 implements MigrationInte
     `);
 
     // 🔹 3) USER MASTER
-    const hashedPassword = await bcrypt.hash('abc', 10);
+    const hashedPassword = await bcrypt.hash('genesis', 10);
 
     await queryRunner.query(
       `
       INSERT INTO "user"
-      (loginsei, password, type_user, pg, mat, ng, tipo, phone, imagem_url, cpf, nunfunc, omeid)
+      (loginsei, password, type_user, pg, mat, ng, tipo, phone, imagem_url, cpf, nunfunc, nunvinc, omeid)
       VALUES
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
       `,
       [
         'emerson.francisco1',
         hashedPassword,
         10,
-        'Cb',
+        'CB',
         1157590,
-        'Francisco',
+        'FRANCISCO',
         'P',
         '(81)98685-4814',
         '/1157590.png',
         '08286667417',
         '3392503',
+        '1',
         1,
       ],
     );

@@ -50,6 +50,18 @@ export class CreateContaTable1775481824058 implements MigrationInterface {
             type: 'timestamp',
             default: 'now()',
           },
+
+          {
+            name: 'created_by_user_id',
+            type: 'integer',
+            isNullable: true,
+          },
+
+          {
+            name: 'updated_by_user_id',
+            type: 'integer',
+            isNullable: true,
+          },
         ],
         uniques: [
           // 🔒 1 CONTA POR USUÁRIO
@@ -74,6 +86,26 @@ export class CreateContaTable1775481824058 implements MigrationInterface {
         referencedTableName: 'user',
         referencedColumnNames: ['id'],
         onDelete: 'CASCADE',
+      }),
+    );
+
+    await queryRunner.createForeignKey(
+      'conta',
+      new TableForeignKey({
+        columnNames: ['created_by_user_id'],
+        referencedTableName: 'user',
+        referencedColumnNames: ['id'],
+        onDelete: 'SET NULL',
+      }),
+    );
+
+    await queryRunner.createForeignKey(
+      'conta',
+      new TableForeignKey({
+        columnNames: ['updated_by_user_id'],
+        referencedTableName: 'user',
+        referencedColumnNames: ['id'],
+        onDelete: 'SET NULL',
       }),
     );
   }

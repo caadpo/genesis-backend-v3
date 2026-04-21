@@ -40,6 +40,10 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsString()
+  nunvinc?: string;
+
+  @IsOptional()
+  @IsString()
   phone?: string;
 
   @IsOptional()

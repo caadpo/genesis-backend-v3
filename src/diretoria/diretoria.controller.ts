@@ -8,7 +8,6 @@ import {
   Put,
   Delete,
   ParseIntPipe,
-  Query,
   UseGuards,
 } from '@nestjs/common';
 import { DiretoriaService } from './diretoria.service';

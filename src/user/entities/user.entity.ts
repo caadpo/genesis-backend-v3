@@ -55,6 +55,9 @@ export class UserEntity {
   @Column({ name: 'nunfunc', length: 10 })
   nunfunc: string;
 
+  @Column({ name: 'nunvinc', length: 10 })
+  nunvinc: string;
+
   // 🔹 NÍVEL DO USUÁRIO (hierarquia)
   @Column({
     name: 'type_user',

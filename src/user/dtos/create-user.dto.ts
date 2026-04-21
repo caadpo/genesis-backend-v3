@@ -12,10 +12,6 @@ export class CreateUserDto {
   @IsNotEmpty()
   loginSei: string;
 
-  @IsString()
-  @IsNotEmpty()
-  password: string;
-
   @IsEnum(UserType)
   typeUser: UserType;
 
@@ -42,6 +38,10 @@ export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
   nunfunc: string;
+
+  @IsString()
+  @IsNotEmpty()
+  nunvinc: string;
 
   @IsOptional()
   @IsString()
