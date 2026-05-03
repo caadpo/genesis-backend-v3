@@ -7,9 +7,12 @@ import { OperacaoController } from './operacao.controller';
 import { Operacao } from './entities/operacao.entity';
 import { Evento } from 'src/evento/entities/evento.entity';
 import { OmeEntity } from 'src/ome/entities/ome.entity';
+import { UserEntity } from 'src/user/entities/user.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Operacao, Evento, OmeEntity])],
+  imports: [
+    TypeOrmModule.forFeature([Operacao, Evento, OmeEntity, UserEntity]),
+  ],
   providers: [OperacaoService],
   controllers: [OperacaoController],
 })

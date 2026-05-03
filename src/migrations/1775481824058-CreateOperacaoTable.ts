@@ -6,11 +6,11 @@ import {
   TableIndex,
 } from 'typeorm';
 
-export class CreateEventoTable1775441760606 implements MigrationInterface {
+export class CreateOperacaoTable1775481824058 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.createTable(
       new Table({
-        name: 'evento',
+        name: 'operacao',
         columns: [
           {
             name: 'id',
@@ -18,7 +18,7 @@ export class CreateEventoTable1775441760606 implements MigrationInterface {
             isPrimary: true,
           },
           {
-            name: 'distribuicao_id',
+            name: 'evento_id',
             type: 'int',
             isNullable: false,
           },
@@ -28,29 +28,27 @@ export class CreateEventoTable1775441760606 implements MigrationInterface {
             isNullable: false,
           },
           {
-            name: 'nome',
+            name: 'nome_operacao',
             type: 'varchar',
-            length: '100',
+            length: '120',
+            isNullable: false,
           },
+
           {
-            name: 'qtd_oficiais',
+            name: 'qtd_oficiais_oper',
             type: 'int',
+            isNullable: false,
           },
           {
-            name: 'qtd_pracas',
+            name: 'qtd_pracas_oper',
             type: 'int',
+            isNullable: false,
           },
           {
-            name: 'valor_total',
-            type: 'numeric',
-            precision: 14,
-            scale: 2,
-          },
-          {
-            name: 'status',
+            name: 'cod_op',
             type: 'varchar',
-            length: '20',
-            default: `'CRIADO'`,
+            length: '50',
+            isNullable: false,
           },
           {
             name: 'created_at',
@@ -67,29 +65,22 @@ export class CreateEventoTable1775441760606 implements MigrationInterface {
       }),
     );
 
-    // 🔥 INDEXES (ESSENCIAL PRA PERFORMANCE DAS SOMAS)
+    // INDEX ÚNICO DO @Index(['cod_op'], { unique: true })
     await queryRunner.createIndex(
-      'evento',
+      'operacao',
       new TableIndex({
-        name: 'IDX_EVENTO_DISTRIBUICAO',
-        columnNames: ['distribuicao_id'],
+        name: 'IDX_OPERACAO_COD_OP',
+        columnNames: ['cod_op'],
+        isUnique: true,
       }),
     );
 
-    await queryRunner.createIndex(
-      'evento',
-      new TableIndex({
-        name: 'IDX_EVENTO_OME',
-        columnNames: ['ome_id'],
-      }),
-    );
-
-    // FK → DISTRIBUICAO
+    // FK → EVENTO
     await queryRunner.createForeignKey(
-      'evento',
+      'operacao',
       new TableForeignKey({
-        columnNames: ['distribuicao_id'],
-        referencedTableName: 'distribuicao',
+        columnNames: ['evento_id'],
+        referencedTableName: 'evento',
         referencedColumnNames: ['id'],
         onDelete: 'CASCADE',
       }),
@@ -97,7 +88,7 @@ export class CreateEventoTable1775441760606 implements MigrationInterface {
 
     // FK → OME
     await queryRunner.createForeignKey(
-      'evento',
+      'operacao',
       new TableForeignKey({
         columnNames: ['ome_id'],
         referencedTableName: 'ome',
@@ -108,6 +99,6 @@ export class CreateEventoTable1775441760606 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.dropTable('evento');
+    await queryRunner.dropTable('operacao');
   }
 }

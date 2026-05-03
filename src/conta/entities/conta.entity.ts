@@ -13,43 +13,41 @@ import { UserEntity } from 'src/user/entities/user.entity';
 @Entity('conta')
 export class ContaEntity {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
 
   @Column()
-  banco: string;
+  banco!: string;
 
   @Column()
-  agencia: string;
+  agencia!: string;
 
   @Column()
-  conta: string;
+  conta!: string;
 
   @Column({ name: 'usuario_id', unique: true })
-  usuarioId: number;
+  usuarioId!: number;
 
   @OneToOne(() => UserEntity, (usuario) => usuario.conta)
   @JoinColumn({ name: 'usuario_id' })
-  usuario: UserEntity;
+  usuario!: UserEntity;
 
   @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @Column({ name: 'created_by_user_id', nullable: true })
-  createdByUserId: number;
+  createdByUserId!: number;
 
   @ManyToOne(() => UserEntity)
   @JoinColumn({ name: 'created_by_user_id' })
-  createdByUser: UserEntity;
+  createdByUser!: UserEntity;
 
-  //Quem atualizou pela ultima vez
   @Column({ name: 'updated_by_user_id', nullable: true })
-  updatedByUserId: number;
+  updatedByUserId!: number;
 
-  //Quem atualizou pela ultima vez
   @ManyToOne(() => UserEntity)
   @JoinColumn({ name: 'updated_by_user_id' })
-  updatedByUser: UserEntity;
+  updatedByUser!: UserEntity;
 }

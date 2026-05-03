@@ -16,6 +16,8 @@ import { Roles } from 'src/decorators/roles.decorator';
 import { UserType } from 'src/user/enum/user-type.enum';
 import { TetoService } from './teto.service';
 import { Teto } from './entities/teto.entity';
+import { CreateTetoDto } from './dtos/create-teto.dto';
+import { UpdateTetoDto } from './dtos/update-teto.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('tetos')
@@ -24,11 +26,28 @@ export class TetosController {
 
   @Post()
   @Roles(UserType.MASTER, UserType.TECNICO)
-  create(@Body() teto: Partial<Teto>): Promise<Teto> {
-    return this.tetoService.create(teto);
+  create(@Body() dto: CreateTetoDto): Promise<Teto> {
+    return this.tetoService.create(dto);
   }
 
-  @Get()
+  // 🔵 PJES
+  @Get('pjes')
+  @Roles(
+    UserType.AUXILIAR,
+    UserType.DIRETOR,
+    UserType.ESTRATEGICO,
+    UserType.TECNICO,
+    UserType.MASTER,
+  )
+  findPjes(
+    @Query('mes') mes: number,
+    @Query('ano') ano: number,
+  ): Promise<Teto[]> {
+    return this.tetoService.findPjesPorMes(Number(mes), Number(ano));
+  }
+
+  // 🟢 DIÁRIAS
+  @Get('diarias')
   @Roles(
     UserType.AUXILIAR,
     UserType.DIRETOR,
@@ -38,24 +57,11 @@ export class TetosController {
     UserType.TECNICO,
     UserType.MASTER,
   )
-  findAll(
-    @Query('sistema') sistema?: string,
-    @Query('mes') mes?: string,
-    @Query('ano') ano?: string,
-  ): Promise<Teto[]> {
-    return this.tetoService.findAll(sistema, mes, ano);
+  findDiarias(): Promise<Teto[]> {
+    return this.tetoService.findDiariasAbertas();
   }
 
   @Get(':id')
-  @Roles(
-    UserType.AUXILIAR,
-    UserType.DIRETOR,
-    UserType.ESTRATEGICO,
-    UserType.FINANCEIRO,
-    UserType.PD,
-    UserType.TECNICO,
-    UserType.MASTER,
-  )
   findOne(@Param('id', ParseIntPipe) id: number): Promise<Teto> {
     return this.tetoService.findOne(id);
   }
@@ -64,9 +70,16 @@ export class TetosController {
   @Roles(UserType.MASTER, UserType.TECNICO)
   update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dados: Partial<Teto>,
+    @Body() dto: UpdateTetoDto,
   ): Promise<Teto> {
-    return this.tetoService.update(id, dados);
+    return this.tetoService.update(id, dto);
+  }
+
+  // 🔒 ENCERRAR FOLHA
+  @Patch(':id/encerrar')
+  @Roles(UserType.MASTER, UserType.TECNICO)
+  encerrar(@Param('id', ParseIntPipe) id: number): Promise<Teto> {
+    return this.tetoService.encerrar(id);
   }
 
   @Delete(':id')

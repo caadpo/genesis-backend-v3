@@ -1,11 +1,15 @@
+import { ReturnDiretoriaDto } from 'src/diretoria/dtos/return-diretoria.dto';
+
 export class ReturnOmeDto {
   id: number;
   nomeOme: string;
-  diretoriaId: number;
+  diretoria?: ReturnDiretoriaDto;
 
   constructor(ome: any) {
     this.id = ome.id;
     this.nomeOme = ome.nomeOme;
-    this.diretoriaId = ome.diretoriaId;
+    this.diretoria = ome.diretoria
+      ? new ReturnDiretoriaDto(ome.diretoria)
+      : undefined;
   }
 }

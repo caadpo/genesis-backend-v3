@@ -29,9 +29,11 @@ export class OmeEntity {
   updatedAt: Date;
 
   @OneToMany(() => UserEntity, (user) => user.ome)
-  users?: UserEntity[];
+  users: UserEntity[];
 
-  @ManyToOne(() => DiretoriaEntity, (diretoria) => diretoria.omes)
+  @ManyToOne(() => DiretoriaEntity, (diretoria) => diretoria.omes, {
+    nullable: false,
+  })
   @JoinColumn({ name: 'diretoriaid', referencedColumnName: 'id' })
-  diretoria?: DiretoriaEntity;
+  diretoria: DiretoriaEntity;
 }

@@ -73,9 +73,9 @@ export class UserEntity {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  @ManyToOne(() => OmeEntity, (ome) => ome.users)
+  @ManyToOne(() => OmeEntity, (ome) => ome.users, { nullable: false })
   @JoinColumn({ name: 'omeid', referencedColumnName: 'id' })
-  ome?: OmeEntity;
+  ome: OmeEntity;
 
   @OneToOne(() => ContaEntity, (conta) => conta.usuario)
   conta: ContaEntity;

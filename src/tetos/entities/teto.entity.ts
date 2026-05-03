@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { StatusTeto } from '../enum/teto-type.enum';
 
 export enum Sistema {
   PJES = 'PJES',
@@ -50,6 +51,13 @@ export class Teto {
 
   @Column({ type: 'enum', enum: TipoPeriodo })
   tipo_periodo: TipoPeriodo;
+
+  @Column({
+    type: 'enum',
+    enum: StatusTeto,
+    default: StatusTeto.ABERTO,
+  })
+  status: StatusTeto;
 
   @CreateDateColumn({ type: 'timestamp' })
   created_at: Date;

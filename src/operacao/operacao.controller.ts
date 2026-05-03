@@ -8,6 +8,8 @@ import {
   Delete,
   ParseIntPipe,
   UseGuards,
+  Query,
+  Request,
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
@@ -25,14 +27,14 @@ export class OperacaoController {
   constructor(private readonly service: OperacaoService) {}
 
   @Post()
-  @Roles(UserType.MASTER, UserType.TECNICO)
-  create(@Body() dto: CreateOperacaoDto) {
-    return this.service.create(dto);
+  @Roles(UserType.AUXILIAR, UserType.TECNICO, UserType.MASTER)
+  create(@Body() dto: CreateOperacaoDto, @Request() req: any) {
+    return this.service.create(dto, req.user); // ✅ passa o usuário autenticado
   }
 
   @Get()
-  findAll() {
-    return this.service.findAll();
+  findAll(@Query('eventoId') eventoId?: string) {
+    return this.service.findAll(eventoId ? Number(eventoId) : undefined);
   }
 
   @Get(':id')
@@ -41,17 +43,18 @@ export class OperacaoController {
   }
 
   @Patch(':id')
-  @Roles(UserType.MASTER, UserType.TECNICO)
+  @Roles(UserType.AUXILIAR, UserType.TECNICO, UserType.MASTER)
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateOperacaoDto,
+    @Request() req: any,
   ) {
-    return this.service.update(id, dto);
+    return this.service.update(id, dto, req.user); // ✅ passa o usuário autenticado
   }
 
   @Delete(':id')
-  @Roles(UserType.MASTER, UserType.TECNICO)
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.service.remove(id);
+  @Roles(UserType.AUXILIAR, UserType.TECNICO, UserType.MASTER)
+  remove(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    return this.service.remove(id, req.user); // ✅ passa o usuário autenticado
   }
 }

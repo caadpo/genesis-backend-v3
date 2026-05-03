@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner, Table } from 'typeorm';
+import { MigrationInterface, QueryRunner, Table, TableIndex } from 'typeorm';
 
 export class CreateTetosTable1775441760604 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -19,6 +19,7 @@ export class CreateTetosTable1775441760604 implements MigrationInterface {
           {
             name: 'sistema',
             type: 'enum',
+            enumName: 'tetos_sistema_enum',
             enum: ['PJES', 'DIARIAS'],
           },
           {
@@ -39,13 +40,11 @@ export class CreateTetosTable1775441760604 implements MigrationInterface {
           },
           {
             name: 'ttctof',
-            type: 'numeric',
-            isNullable: false,
+            type: 'int',
           },
           {
             name: 'ttctprc',
-            type: 'numeric',
-            isNullable: false,
+            type: 'int',
           },
           {
             name: 'data_inicio',
@@ -59,7 +58,15 @@ export class CreateTetosTable1775441760604 implements MigrationInterface {
           {
             name: 'tipo_periodo',
             type: 'enum',
+            enumName: 'tetos_tipo_periodo_enum',
             enum: ['MENSAL', 'OPERACAO'],
+          },
+          {
+            name: 'status',
+            type: 'enum',
+            enumName: 'tetos_status_enum',
+            enum: ['ABERTO', 'ENCERRADO'],
+            default: `'ABERTO'`,
           },
           {
             name: 'created_at',
@@ -70,14 +77,41 @@ export class CreateTetosTable1775441760604 implements MigrationInterface {
             name: 'updated_at',
             type: 'timestamp',
             default: 'now()',
-            onUpdate: 'CURRENT_TIMESTAMP',
           },
         ],
+      }),
+    );
+
+    // 🔥 Índices essenciais para suas consultas reais
+    await queryRunner.createIndex(
+      'tetos',
+      new TableIndex({
+        name: 'IDX_TETOS_SISTEMA',
+        columnNames: ['sistema'],
+      }),
+    );
+
+    await queryRunner.createIndex(
+      'tetos',
+      new TableIndex({
+        name: 'IDX_TETOS_STATUS',
+        columnNames: ['status'],
+      }),
+    );
+
+    await queryRunner.createIndex(
+      'tetos',
+      new TableIndex({
+        name: 'IDX_TETOS_DATA_PERIODO',
+        columnNames: ['data_inicio', 'data_fim'],
       }),
     );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.dropTable('tetos');
+    await queryRunner.query(`DROP TYPE IF EXISTS tetos_sistema_enum`);
+    await queryRunner.query(`DROP TYPE IF EXISTS tetos_tipo_periodo_enum`);
+    await queryRunner.query(`DROP TYPE IF EXISTS tetos_status_enum`);
   }
 }

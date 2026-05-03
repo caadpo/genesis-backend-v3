@@ -1,6 +1,6 @@
 export class ReturnOperacaoResumoDto {
-  soma_of: number;
-  soma_prc: number;
-  limite_of: number;
-  limite_prc: number;
+  soma_of_oper!: number;
+  soma_prc_oper!: number;
+  limite_of!: number;
+  limite_prc!: number;
 }

@@ -1,6 +1,6 @@
 export class ReturnEventoResumoDto {
-  soma_of: number;
-  soma_prc: number;
-  limite_of: number;
-  limite_prc: number;
+  soma_of_evento!: number;
+  soma_prc_evento!: number;
+  limite_of_distribuicao!: number;
+  limite_prc_distribuicao!: number;
 }

@@ -1,19 +1,40 @@
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
+import { InjectRepository } from '@nestjs/typeorm';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
+import { UserEntity } from 'src/user/entities/user.entity';
+import { ReturnUserDto } from 'src/user/dtos/return-user.dto';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(
+    @InjectRepository(UserEntity)
+    private readonly userRepo: Repository<UserEntity>,
+    private readonly configService: ConfigService,
+  ) {
+    const secret = configService.get<string>('JWT_SECRET');
+
+    if (!secret) {
+      throw new Error('JWT_SECRET não definido no .env');
+    }
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:
-        '3f9b2e8c6a1d4f7b9e0c2a5d8f6b1c3e9a7d2f4b6c8e1a0d9f3b5c7e2a4d6f8',
+      secretOrKey: secret,
     });
   }
 
   async validate(payload: any) {
-    return payload;
+    const user = await this.userRepo.findOne({
+      where: { id: payload.sub },
+      relations: ['ome', 'conta', 'conta.createdByUser', 'conta.updatedByUser'],
+    });
+
+    if (!user) return null;
+
+    return new ReturnUserDto(user);
   }
 }

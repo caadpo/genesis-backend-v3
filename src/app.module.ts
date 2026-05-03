@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import * as Joi from 'joi';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TetosModule } from './tetos/teto.module';
@@ -13,12 +13,26 @@ import { EventoModule } from './evento/evento.module';
 import { OperacaoModule } from './operacao/operacao.module';
 import { ContaModule } from './conta/conta.module';
 import { DadossgpModule } from './dadossgp/dadossgp.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: `.env.${process.env.NODE_ENV || 'development'}`,
+      validationSchema: Joi.object({
+        NODE_ENV: Joi.string()
+          .valid('development', 'production', 'test')
+          .default('development'),
+        PORT: Joi.number().default(3001),
+        CORS_ORIGIN: Joi.string().default('http://localhost:3000'),
+        DB_HOST: Joi.string().required(),
+        DB_PORT: Joi.number().required(),
+        DB_USERNAME: Joi.string().required(),
+        DB_PASSWORD: Joi.string().required(),
+        DB_DATABASE: Joi.string().required(),
+        JWT_SECRET: Joi.string().required(),
+      }),
     }),
 
     TypeOrmModule.forRoot({
@@ -29,8 +43,8 @@ import { DadossgpModule } from './dadossgp/dadossgp.module';
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
       entities: [`${__dirname}/**/*.entity{.ts,.js}`],
-      migrations: [`${__dirname}/migrations/{.ts,*.js}`],
-      migrationsRun: true,
+      migrations: [`${__dirname}/migrations/*.{ts,js}`],
+      migrationsRun: process.env.NODE_ENV !== 'production',
     }),
 
     TetosModule,

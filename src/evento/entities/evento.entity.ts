@@ -1,5 +1,6 @@
 import { Distribuicao } from 'src/distribuicao/entities/distribuicao.entity';
 import { OmeEntity } from 'src/ome/entities/ome.entity';
+import { UserEntity } from 'src/user/entities/user.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -9,38 +10,53 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { StatusEvento } from '../enum/eventos-status.enum';
 
 @Entity('evento')
 export class Evento {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
 
   @ManyToOne(() => Distribuicao, { nullable: false })
   @JoinColumn({ name: 'distribuicao_id' })
-  distribuicao: Distribuicao;
+  distribuicao!: Distribuicao;
 
   @ManyToOne(() => OmeEntity, { nullable: false })
   @JoinColumn({ name: 'ome_id' })
-  ome: OmeEntity;
+  ome!: OmeEntity;
 
   @Column({ type: 'varchar', length: 100 })
-  nome: string;
+  nome_evento!: string;
 
   @Column({ type: 'int' })
-  qtd_oficiais: number;
+  qtd_of_evento!: number;
 
   @Column({ type: 'int' })
-  qtd_pracas: number;
+  qtd_prc_evento!: number;
 
-  @Column({ type: 'numeric', precision: 14, scale: 2 })
-  valor_total: number;
+  @ManyToOne(() => UserEntity, { nullable: false })
+  @JoinColumn({ name: 'user_id_evento' })
+  user!: UserEntity;
 
-  @Column({ type: 'varchar', length: 20, default: 'CRIADO' })
-  status: string;
+  @Column({
+    type: 'enum',
+    enum: StatusEvento,
+    default: StatusEvento.CRIADO,
+  })
+  status_evento!: StatusEvento;
+
+  @Column({ nullable: true })
+  homologado_em?: Date;
+
+  @Column({ nullable: true })
+  pd_concluida_em?: Date;
+
+  @Column({ nullable: true })
+  pago_em?: Date;
 
   @CreateDateColumn()
-  created_at: Date;
+  created_at!: Date;
 
   @UpdateDateColumn()
-  updated_at: Date;
+  updated_at!: Date;
 }

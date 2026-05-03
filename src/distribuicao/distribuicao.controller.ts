@@ -10,7 +10,10 @@ import {
   ParseIntPipe,
   UseGuards,
   Query,
+  Req,
 } from '@nestjs/common';
+
+import type { Request } from 'express';
 
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/guards/roles.guard';
@@ -19,6 +22,7 @@ import { UserType } from 'src/user/enum/user-type.enum';
 
 import { DistribuicaoService } from './distribuicao.service';
 import { CreateDistribuicaoDto } from './dtos/create-distribuicao.dto';
+import { UserEntity } from 'src/user/entities/user.entity';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('distribuicao')
@@ -32,12 +36,11 @@ export class DistribuicaoController {
   }
 
   @Get()
-  findAll(@Query('tetoId') tetoId?: string) {
-    if (tetoId) {
-      return this.service.findByTeto(Number(tetoId));
-    }
-
-    return this.service.findAll();
+  findAll(@Query('tetoId') tetoId: string, @Req() req: Request) {
+    return this.service.findAllComRegra(
+      tetoId ? Number(tetoId) : undefined,
+      req.user as UserEntity,
+    );
   }
 
   @Get(':id')

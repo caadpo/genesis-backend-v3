@@ -1,12 +1,12 @@
-// create-teto.dto.ts
 import {
   IsEnum,
   IsString,
   IsNumber,
-  IsDate,
   IsOptional,
+  IsDateString,
 } from 'class-validator';
 import { Sistema, TipoPeriodo } from '../entities/teto.entity';
+import { StatusTeto } from '../enum/teto-type.enum';
 
 export class CreateTetoDto {
   @IsEnum(Sistema)
@@ -27,13 +27,17 @@ export class CreateTetoDto {
   @IsNumber()
   ttctprc: number;
 
-  @IsDate()
-  data_inicio: Date;
+  @IsDateString()
+  data_inicio: string;
 
   @IsOptional()
-  @IsDate()
-  data_fim?: Date;
+  @IsDateString()
+  data_fim?: string;
 
   @IsEnum(TipoPeriodo)
   tipo_periodo: TipoPeriodo;
+
+  @IsOptional()
+  @IsEnum(StatusTeto)
+  status?: StatusTeto;
 }

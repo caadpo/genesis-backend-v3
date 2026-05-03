@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -9,10 +10,12 @@ import { Repository } from 'typeorm';
 import { Operacao } from './entities/operacao.entity';
 import { Evento } from 'src/evento/entities/evento.entity';
 import { OmeEntity } from 'src/ome/entities/ome.entity';
+import { UserEntity } from 'src/user/entities/user.entity'; // ✅
 
 import { CreateOperacaoDto } from './dtos/create-operacao.dto';
 import { UpdateOperacaoDto } from './dtos/update-operacao.dto';
 import { ReturnOperacaoResumoDto } from './dtos/return-operacao-resumo.dto';
+import { UserType } from 'src/user/enum/user-type.enum'; // ✅
 
 @Injectable()
 export class OperacaoService {
@@ -25,26 +28,66 @@ export class OperacaoService {
 
     @InjectRepository(OmeEntity)
     private readonly omeRepo: Repository<OmeEntity>,
+
+    @InjectRepository(UserEntity) // ✅
+    private readonly userRepo: Repository<UserEntity>,
   ) {}
 
-  // 🔥 QUERY PERFORMÁTICA
+  // ─── Validação de status ────────────────────────────────────────────────────
+
+  private validarStatusEvento(evento: Evento): void {
+    if (evento.status_evento !== 'CRIADO') {
+      throw new ForbiddenException(
+        `Evento com status "${evento.status_evento}" não permite criação, edição ou exclusão de operações.`,
+      );
+    }
+  }
+
+  // ─── Validação de OME para Auxiliar ────────────────────────────────────────
+
+  private async validarPermissaoOme(
+    authUser: { id: number; typeUser: UserType },
+    eventoOmeId: number,
+  ): Promise<void> {
+    const isAuxiliar = Number(authUser.typeUser) === UserType.AUXILIAR;
+    if (!isAuxiliar) return; // Tecnico e Master passam direto
+
+    // Carrega o usuário com sua OME
+    const user = await this.userRepo.findOne({
+      where: { id: authUser.id },
+      relations: ['ome'],
+    });
+
+    if (!user?.ome) {
+      throw new ForbiddenException('Usuário não possui OME vinculada.');
+    }
+
+    if (user.ome.id !== eventoOmeId) {
+      throw new ForbiddenException(
+        'Auxiliar só pode criar/editar/excluir operações de eventos da sua própria OME.',
+      );
+    }
+  }
+
+  // ─── Queries de resumo ──────────────────────────────────────────────────────
+
   private async getResumoEvento(
     eventoId: number,
   ): Promise<ReturnOperacaoResumoDto> {
     const result = await this.operacaoRepo
       .createQueryBuilder('o')
-      .select('COALESCE(SUM(o.qtd_oficiais_oper), 0)', 'soma_of')
-      .addSelect('COALESCE(SUM(o.qtd_pracas_oper), 0)', 'soma_prc')
+      .select('COALESCE(SUM(o.qtd_oficiais_oper), 0)', 'soma_of_oper')
+      .addSelect('COALESCE(SUM(o.qtd_pracas_oper), 0)', 'soma_prc_oper')
       .where('o.evento_id = :id', { id: eventoId })
       .getRawOne();
 
     const evento = await this.eventoRepo.findOneBy({ id: eventoId });
 
     return {
-      soma_of: Number(result.soma_of),
-      soma_prc: Number(result.soma_prc),
-      limite_of: Number(evento!.qtd_oficiais),
-      limite_prc: Number(evento!.qtd_pracas),
+      soma_of_oper: Number(result.soma_of_oper),
+      soma_prc_oper: Number(result.soma_prc_oper),
+      limite_of: Number(evento!.qtd_of_evento),
+      limite_prc: Number(evento!.qtd_prc_evento),
     };
   }
 
@@ -54,8 +97,8 @@ export class OperacaoService {
   ): Promise<ReturnOperacaoResumoDto> {
     const result = await this.operacaoRepo
       .createQueryBuilder('o')
-      .select('COALESCE(SUM(o.qtd_oficiais_oper), 0)', 'soma_of')
-      .addSelect('COALESCE(SUM(o.qtd_pracas_oper), 0)', 'soma_prc')
+      .select('COALESCE(SUM(o.qtd_oficiais_oper), 0)', 'soma_of_oper')
+      .addSelect('COALESCE(SUM(o.qtd_pracas_oper), 0)', 'soma_prc_oper')
       .where('o.evento_id = :id', { id: eventoId })
       .andWhere('o.id != :operacaoId', { operacaoId })
       .getRawOne();
@@ -63,89 +106,152 @@ export class OperacaoService {
     const evento = await this.eventoRepo.findOneBy({ id: eventoId });
 
     return {
-      soma_of: Number(result.soma_of),
-      soma_prc: Number(result.soma_prc),
-      limite_of: Number(evento!.qtd_oficiais),
-      limite_prc: Number(evento!.qtd_pracas),
+      soma_of_oper: Number(result.soma_of_oper),
+      soma_prc_oper: Number(result.soma_prc_oper),
+      limite_of: Number(evento!.qtd_of_evento),
+      limite_prc: Number(evento!.qtd_prc_evento),
     };
   }
 
-  async create(dto: CreateOperacaoDto): Promise<Operacao> {
-    const evento = await this.eventoRepo.findOneBy({
-      id: dto.evento_id,
+  // ─── Geração de cod_op ──────────────────────────────────────────────────────
+
+  private gerarCodOp(): string {
+    const agora = new Date();
+    const mes = String(agora.getMonth() + 1).padStart(2, '0');
+    const ano = String(agora.getFullYear());
+    const prefixo = String(Math.floor(1000 + Math.random() * 9000));
+    return `${prefixo}${mes}${ano}`;
+  }
+
+  private async gerarCodOpUnico(): Promise<string> {
+    let cod: string;
+    let existe: boolean;
+
+    do {
+      cod = this.gerarCodOp();
+      existe = !!(await this.operacaoRepo.findOne({ where: { cod_op: cod } }));
+    } while (existe);
+
+    return cod;
+  }
+
+  // ─── CRUD ───────────────────────────────────────────────────────────────────
+
+  async create(
+    dto: CreateOperacaoDto,
+    authUser: { id: number; typeUser: UserType },
+  ): Promise<Operacao> {
+    const evento = await this.eventoRepo.findOne({
+      where: { id: dto.evento_id },
+      relations: ['ome'], // ✅ precisa da OME do evento
     });
     if (!evento) throw new NotFoundException('Evento não encontrado');
+
+    this.validarStatusEvento(evento);
+
+    // ✅ Auxiliar só pode criar em eventos da sua OME
+    await this.validarPermissaoOme(authUser, evento.ome.id);
 
     const ome = await this.omeRepo.findOneBy({ id: dto.ome_id });
     if (!ome) throw new NotFoundException('OME não encontrada');
 
     const resumo = await this.getResumoEvento(dto.evento_id);
 
-    if (resumo.soma_of + dto.qtd_oficiais_oper > resumo.limite_of) {
-      throw new BadRequestException('OF ultrapassa limite do evento');
+    if (resumo.soma_of_oper + dto.qtd_oficiais_oper > resumo.limite_of) {
+      throw new BadRequestException(
+        `Oficiais ultrapassam o limite do evento (limite: ${resumo.limite_of}, em uso: ${resumo.soma_of_oper})`,
+      );
     }
 
-    if (resumo.soma_prc + dto.qtd_pracas_oper > resumo.limite_prc) {
-      throw new BadRequestException('PRC ultrapassa limite do evento');
+    if (resumo.soma_prc_oper + dto.qtd_pracas_oper > resumo.limite_prc) {
+      throw new BadRequestException(
+        `Praças ultrapassam o limite do evento (limite: ${resumo.limite_prc}, em uso: ${resumo.soma_prc_oper})`,
+      );
     }
+
+    const cod_op = await this.gerarCodOpUnico();
 
     const operacao = this.operacaoRepo.create({
       evento,
       ome,
       nome_operacao: dto.nome_operacao,
-      cod_verba: dto.cod_verba,
-      cod_op: dto.cod_op,
+      cod_op,
       qtd_oficiais_oper: dto.qtd_oficiais_oper,
       qtd_pracas_oper: dto.qtd_pracas_oper,
-      user_id: dto.user_id,
     });
 
     return this.operacaoRepo.save(operacao);
   }
 
-  findAll(): Promise<Operacao[]> {
-    return this.operacaoRepo.find({
-      relations: ['evento', 'ome'],
-    });
+  async findAll(eventoId?: number) {
+    const qb = this.operacaoRepo
+      .createQueryBuilder('o')
+      .leftJoinAndSelect('o.evento', 'e')
+      .leftJoinAndSelect('o.ome', 'ome');
+
+    if (eventoId) {
+      qb.where('e.id = :id', { id: eventoId });
+    }
+
+    return qb.getMany();
   }
 
   async findOne(id: number): Promise<Operacao> {
     const operacao = await this.operacaoRepo.findOne({
       where: { id },
-      relations: ['evento', 'ome'],
+      relations: ['evento', 'evento.ome', 'ome'], // ✅ inclui ome do evento
     });
 
     if (!operacao) throw new NotFoundException('Operação não encontrada');
     return operacao;
   }
 
-  async update(id: number, dto: UpdateOperacaoDto) {
+  async update(
+    id: number,
+    dto: UpdateOperacaoDto,
+    authUser: { id: number; typeUser: UserType },
+  ) {
     const operacao = await this.findOne(id);
 
-    // NÃO ALTERA A ENTIDADE AINDA
+    this.validarStatusEvento(operacao.evento);
 
-    const eventoId = dto.evento_id ?? operacao.evento.id;
+    // ✅ Auxiliar só pode editar operações de eventos da sua OME
+    await this.validarPermissaoOme(authUser, operacao.evento.ome.id);
 
-    const resumo = await this.getResumoEventoParaUpdate(eventoId, id);
-
+    const novoEventoId = dto.evento_id ?? operacao.evento.id;
     const novoOf = dto.qtd_oficiais_oper ?? operacao.qtd_oficiais_oper;
-
     const novoPrc = dto.qtd_pracas_oper ?? operacao.qtd_pracas_oper;
 
-    if (resumo.soma_of + novoOf > resumo.limite_of) {
-      throw new BadRequestException('OF ultrapassa limite do evento');
+    let resumo: ReturnOperacaoResumoDto;
+
+    if (dto.evento_id && dto.evento_id !== operacao.evento.id) {
+      const novoEvento = await this.eventoRepo.findOne({
+        where: { id: dto.evento_id },
+        relations: ['ome'],
+      });
+      if (!novoEvento) throw new NotFoundException('Evento não encontrado');
+
+      this.validarStatusEvento(novoEvento);
+
+      // ✅ Auxiliar também não pode mover para evento de outra OME
+      await this.validarPermissaoOme(authUser, novoEvento.ome.id);
+
+      resumo = await this.getResumoEvento(novoEventoId);
+      operacao.evento = novoEvento;
+    } else {
+      resumo = await this.getResumoEventoParaUpdate(novoEventoId, id);
     }
 
-    if (resumo.soma_prc + novoPrc > resumo.limite_prc) {
-      throw new BadRequestException('PRC ultrapassa limite do evento');
+    if (resumo.soma_of_oper + novoOf > resumo.limite_of) {
+      throw new BadRequestException(
+        `Oficiais ultrapassam o limite do evento (limite: ${resumo.limite_of}, em uso: ${resumo.soma_of_oper})`,
+      );
     }
 
-    // AGORA SIM altera a entidade
-
-    if (dto.evento_id) {
-      const evento = await this.eventoRepo.findOneBy({ id: eventoId });
-      if (!evento) throw new NotFoundException('Evento não encontrado');
-      operacao.evento = evento;
+    if (resumo.soma_prc_oper + novoPrc > resumo.limite_prc) {
+      throw new BadRequestException(
+        `Praças ultrapassam o limite do evento (limite: ${resumo.limite_prc}, em uso: ${resumo.soma_prc_oper})`,
+      );
     }
 
     if (dto.ome_id) {
@@ -164,7 +270,14 @@ export class OperacaoService {
     return this.operacaoRepo.save(operacao);
   }
 
-  async remove(id: number) {
+  async remove(id: number, authUser: { id: number; typeUser: UserType }) {
+    const operacao = await this.findOne(id);
+
+    this.validarStatusEvento(operacao.evento);
+
+    // ✅ Auxiliar só pode excluir operações de eventos da sua OME
+    await this.validarPermissaoOme(authUser, operacao.evento.ome.id);
+
     await this.operacaoRepo.delete(id);
   }
 }

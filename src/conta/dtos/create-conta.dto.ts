@@ -1,6 +1,16 @@
+// src/conta/dtos/update-conta.dto.ts
+import { IsOptional, IsString } from 'class-validator';
+
 export class CreateContaDto {
-  usuarioId: number;
-  banco: string;
-  agencia: string;
-  conta: string;
+  @IsOptional()
+  @IsString()
+  banco?: string;
+
+  @IsOptional()
+  @IsString()
+  agencia?: string;
+
+  @IsOptional()
+  @IsString()
+  conta?: string;
 }

@@ -7,7 +7,7 @@ import { UpdateUserDto } from './dtos/update-user.dto';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { OmeEntity } from 'src/ome/entities/ome.entity';
 import { UserSearchDto } from './dtos/user-search.dto';
-import { compare, hash } from 'bcrypt';
+import { createPasswordHashed, validatePassword } from 'src/utils/password';
 import { ForbiddenException } from '@nestjs/common';
 import { UserType } from './enum/user-type.enum';
 import { QueryFailedError } from 'typeorm';
@@ -70,7 +70,7 @@ export class UserService {
     if (!ome) throw new NotFoundException('OME não encontrada');
 
     const DEFAULT_PASSWORD = 'genesis';
-    const hashedPassword = await hash(DEFAULT_PASSWORD, 10);
+    const hashedPassword = await createPasswordHashed(DEFAULT_PASSWORD);
 
     const user: DeepPartial<UserEntity> = {
       loginSei: dto.loginSei,
@@ -189,7 +189,7 @@ export class UserService {
     const user = await this.findById(id);
 
     if (dto.password) {
-      user.password = await hash(dto.password, 10);
+      user.password = await createPasswordHashed(dto.password);
       delete dto.password;
     }
 
@@ -220,12 +220,12 @@ export class UserService {
   ): Promise<void> {
     const user = await this.findById(userId);
 
-    const match = await compare(currentPassword, user.password);
+    const match = await validatePassword(currentPassword, user.password);
     if (!match) {
       throw new ForbiddenException('Senha atual incorreta');
     }
 
-    user.password = await hash(newPassword, 10);
+    user.password = await createPasswordHashed(newPassword);
     await this.userRepository.save(user);
   }
 
@@ -251,7 +251,7 @@ export class UserService {
     }
 
     const DEFAULT_PASSWORD = 'genesis';
-    target.password = await hash(DEFAULT_PASSWORD, 10);
+    target.password = await createPasswordHashed(DEFAULT_PASSWORD);
     await this.userRepository.save(target);
   }
 

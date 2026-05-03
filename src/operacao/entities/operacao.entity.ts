@@ -15,37 +15,31 @@ import {
 @Index(['cod_op'], { unique: true })
 export class Operacao {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
 
   @ManyToOne(() => Evento, { nullable: false })
   @JoinColumn({ name: 'evento_id' })
-  evento: Evento;
+  evento!: Evento;
 
   @ManyToOne(() => OmeEntity, { nullable: false })
   @JoinColumn({ name: 'ome_id' })
-  ome: OmeEntity;
+  ome!: OmeEntity;
 
   @Column({ type: 'varchar', length: 120 })
-  nome_operacao: string;
-
-  @Column({ type: 'varchar', length: 30 })
-  cod_verba: string;
+  nome_operacao!: string;
 
   @Column({ type: 'int' })
-  qtd_oficiais_oper: number;
+  qtd_oficiais_oper!: number;
 
   @Column({ type: 'int' })
-  qtd_pracas_oper: number;
+  qtd_pracas_oper!: number;
 
   @Column({ type: 'varchar', length: 50 })
-  cod_op: string;
-
-  @Column({ type: 'int' })
-  user_id: number;
+  cod_op!: string;
 
   @CreateDateColumn()
-  created_at: Date;
+  created_at!: Date;
 
   @UpdateDateColumn()
-  updated_at: Date;
+  updated_at!: Date;
 }
