@@ -38,6 +38,20 @@ export class EventoController {
     return this.service.alterarStatus(id, status, req.user);
   }
 
+  @Get(':id/resumo-escalas')
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.AUXILIAR,
+    UserType.DIRETOR,
+    UserType.ESTRATEGICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+  )
+  getResumoEscalas(@Param('id', ParseIntPipe) id: number) {
+    return this.service.getResumoEscalas(id);
+  }
+
   @Post()
   @Roles(UserType.MASTER, UserType.TECNICO, UserType.DIRETOR)
   create(@Body() dto: CreateEventoDto, @Req() req: Request) {

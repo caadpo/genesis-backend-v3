@@ -20,48 +20,48 @@ export enum TipoPeriodo {
 @Entity('tetos')
 export class Teto {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
 
   @Column({ name: 'imagem_url', nullable: true })
-  imagemUrl: string;
+  imagemUrl!: string;
 
   @Column({ type: 'enum', enum: Sistema })
-  sistema: Sistema;
+  sistema!: Sistema;
 
   @Column({ type: 'varchar', length: 100 })
-  nome_verba: string;
+  nome_verba!: string;
 
   @Column({ type: 'varchar', length: 50 })
-  cod_verba: string;
+  cod_verba!: string;
 
   @Column({ type: 'numeric', precision: 14, scale: 2 })
-  valor_total: number;
+  valor_total!: number;
 
   @Column({ type: 'int' })
-  ttctof: number;
+  ttctof!: number;
 
   @Column({ type: 'int' })
-  ttctprc: number;
+  ttctprc!: number;
 
   @Column({ type: 'date' })
-  data_inicio: string;
+  data_inicio!: string;
 
   @Column({ type: 'date', nullable: true })
   data_fim?: string;
 
   @Column({ type: 'enum', enum: TipoPeriodo })
-  tipo_periodo: TipoPeriodo;
+  tipo_periodo!: TipoPeriodo;
 
   @Column({
     type: 'enum',
     enum: StatusTeto,
     default: StatusTeto.ABERTO,
   })
-  status: StatusTeto;
+  status!: StatusTeto;
 
   @CreateDateColumn({ type: 'timestamp' })
-  created_at: Date;
+  created_at!: Date;
 
   @UpdateDateColumn({ type: 'timestamp' })
-  updated_at: Date;
+  updated_at!: Date;
 }

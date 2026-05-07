@@ -14,26 +14,26 @@ import {
 @Entity({ name: 'ome' })
 export class OmeEntity {
   @PrimaryGeneratedColumn('rowid')
-  id: number;
+  id!: number;
 
   @Column({ name: 'nomeome', nullable: false })
-  nomeOme: string;
+  nomeOme!: string;
 
   @Column({ name: 'diretoriaid', nullable: false })
-  diretoriaId: number;
+  diretoriaId!: number;
 
   @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @OneToMany(() => UserEntity, (user) => user.ome)
-  users: UserEntity[];
+  users!: UserEntity[];
 
   @ManyToOne(() => DiretoriaEntity, (diretoria) => diretoria.omes, {
     nullable: false,
   })
   @JoinColumn({ name: 'diretoriaid', referencedColumnName: 'id' })
-  diretoria: DiretoriaEntity;
+  diretoria!: DiretoriaEntity;
 }

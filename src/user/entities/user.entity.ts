@@ -20,43 +20,43 @@ import { ContaEntity } from 'src/conta/entities/conta.entity';
 @Index(['nunfunc'], { unique: true })
 export class UserEntity {
   @PrimaryGeneratedColumn('rowid')
-  id: number;
+  id!: number;
 
   @Column({ name: 'imagem_url', nullable: true })
-  imagemUrl: string;
+  imagemUrl!: string;
 
   @Column({ name: 'loginsei', nullable: false })
-  loginSei: string;
+  loginSei!: string;
 
   @Column({ name: 'password', nullable: false })
-  password: string;
+  password!: string;
 
   @Column({ name: 'pg', nullable: false })
-  pg: string;
+  pg!: string;
 
   @Column({ name: 'mat', nullable: false })
-  mat: number;
+  mat!: number;
 
   @Column({ name: 'ng', nullable: false })
-  nomeGuerra: string;
+  nomeGuerra!: string;
 
   @Column({ name: 'tipo', nullable: false })
-  tipo: string;
+  tipo!: string;
 
   @Column({ name: 'omeid', nullable: false })
-  omeId: number;
+  omeId!: number;
 
   @Column({ name: 'phone' })
-  phone: string;
+  phone!: string;
 
   @Column({ name: 'cpf', length: 11 })
-  cpf: string;
+  cpf!: string;
 
   @Column({ name: 'nunfunc', length: 10 })
-  nunfunc: string;
+  nunfunc!: string;
 
   @Column({ name: 'nunvinc', length: 10 })
-  nunvinc: string;
+  nunvinc!: string;
 
   // 🔹 NÍVEL DO USUÁRIO (hierarquia)
   @Column({
@@ -65,18 +65,18 @@ export class UserEntity {
     type: 'enum',
     enum: UserType,
   })
-  typeUser: UserType;
+  typeUser!: UserType;
 
   @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @ManyToOne(() => OmeEntity, (ome) => ome.users, { nullable: false })
   @JoinColumn({ name: 'omeid', referencedColumnName: 'id' })
-  ome: OmeEntity;
+  ome!: OmeEntity;
 
   @OneToOne(() => ContaEntity, (conta) => conta.usuario)
-  conta: ContaEntity;
+  conta!: ContaEntity;
 }

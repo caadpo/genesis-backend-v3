@@ -22,7 +22,7 @@ export class ContaController {
 
   @Post()
   criar(@Body() dto: CreateContaDto, @Req() req: any) {
-    return this.service.criar(dto, req.user.sub);
+    return this.service.criar(dto, req.user);
   }
 
   @Get('usuario/:usuarioId')
@@ -36,7 +36,7 @@ export class ContaController {
     @Body() dto: UpdateContaDto,
     @Req() req: any,
   ) {
-    return this.service.atualizar(id, dto, req.user.id);
+    return this.service.atualizar(id, dto, req.user);
   }
 
   @Delete(':id')

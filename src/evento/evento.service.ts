@@ -15,6 +15,12 @@ import { UserEntity } from 'src/user/entities/user.entity';
 import { ReturnEventoDto } from './dtos/return-evento.dto';
 import { StatusEvento } from './enum/eventos-status.enum';
 import { UserType } from 'src/user/enum/user-type.enum';
+// ─── Novos imports ───────────────────────────────────────────────────────────
+import { EscalaEntity } from 'src/escala/entities/escala.entity';
+import {
+  ReturnEventoComEscalasDto,
+  UsuarioResumoEscalaDto,
+} from './dtos/return-evento-com-escalas.dto';
 
 @Injectable()
 export class EventoService {
@@ -30,7 +36,120 @@ export class EventoService {
 
     @InjectRepository(OmeEntity)
     private readonly omeRepo: Repository<OmeEntity>,
+
+    // ─── Novo InjectRepository no construtor ────────────────────────────────────
+    @InjectRepository(EscalaEntity)
+    private readonly escalaRepo: Repository<EscalaEntity>,
   ) {}
+
+  // ─── Método getResumoEscalas ─────────────────────────────────────────────────
+  async getResumoEscalas(eventoId: number): Promise<ReturnEventoComEscalasDto> {
+    // ✅ Busca o evento completo
+    const evento = await this.eventoRepo.findOne({
+      where: { id: eventoId },
+      relations: ['ome', 'user', 'user.ome'],
+    });
+    if (!evento) throw new NotFoundException('Evento não encontrado');
+
+    // ✅ Query performática: une escala → operacao → evento, agrupa por usuario_id
+    // Todos os dados do usuário vêm dos campos desnormalizados da escala
+    const rows = await this.escalaRepo
+      .createQueryBuilder('e')
+      .select('e.usuario_id', 'usuarioId')
+      .addSelect('e.mat', 'mat')
+      .addSelect('e.pg_escala', 'pg')
+      .addSelect('e.nome_escala', 'nomeGuerra')
+      .addSelect('e.nomeome_escala', 'nomeOme')
+      .addSelect('e.phone_escala', 'phone')
+      .addSelect('e.cpf_escala', 'cpf')
+      .addSelect('e.banco_escala', 'banco')
+      .addSelect('e.agencia_escala', 'agencia')
+      .addSelect('e.conta_escala', 'conta')
+      .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'totalCotas')
+      .innerJoin('e.operacao', 'op')
+      .innerJoin('op.evento', 'ev')
+      .where('ev.id = :eventoId', { eventoId })
+      .groupBy('e.usuario_id')
+      .addGroupBy('e.mat')
+      .addGroupBy('e.pg_escala')
+      .addGroupBy('e.nome_escala')
+      .addGroupBy('e.nomeome_escala')
+      .addGroupBy('e.phone_escala')
+      .addGroupBy('e.cpf_escala')
+      .addGroupBy('e.banco_escala')
+      .addGroupBy('e.agencia_escala')
+      .addGroupBy('e.conta_escala')
+      .orderBy('e.nomeome_escala', 'ASC')
+      .addOrderBy('e.pg_escala', 'ASC')
+      .addOrderBy('e.nome_escala', 'ASC')
+      .getRawMany();
+
+    // ✅ Busca nunfunc e nunvinc do UserEntity — únicos campos não desnormalizados
+    const usuarioIds: number[] = [
+      ...new Set(rows.map((r) => Number(r.usuarioId))),
+    ];
+
+    const usuarios = await this.userRepo.find({
+      where: usuarioIds.map((id) => ({ id })),
+      select: ['id', 'nunfunc', 'nunvinc'],
+    });
+
+    const nunfuncMap = new Map(
+      usuarios.map((u) => [u.id, { nunfunc: u.nunfunc, nunvinc: u.nunvinc }]),
+    );
+
+    // ✅ Totalizadores separados por tipo
+    const totalCotasOficiais = rows
+      .filter((r) => r.pg !== 'O') // filtra por pg_escala se quiser, ou use tipo_escala
+      .reduce((sum, r) => sum + Number(r.totalCotas), 0);
+
+    // Melhor usar tipo_escala — adicione ao select e groupBy
+    const rowsComTipo = await this.escalaRepo
+      .createQueryBuilder('e')
+      .select('e.tipo_escala', 'tipo')
+      .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'soma')
+      .innerJoin('e.operacao', 'op')
+      .innerJoin('op.evento', 'ev')
+      .where('ev.id = :eventoId', { eventoId })
+      .groupBy('e.tipo_escala')
+      .getRawMany();
+
+    const somaOf = Number(rowsComTipo.find((r) => r.tipo === 'O')?.soma ?? 0);
+    const somaPrc = Number(rowsComTipo.find((r) => r.tipo === 'P')?.soma ?? 0);
+
+    const usuariosDto: UsuarioResumoEscalaDto[] = rows.map((r) => ({
+      usuarioId: Number(r.usuarioId),
+      mat: Number(r.mat),
+      pg: r.pg,
+      nomeGuerra: r.nomeGuerra,
+      nomeOme: r.nomeOme,
+      phone: r.phone ?? '-',
+      cpf: r.cpf,
+      nunfunc: nunfuncMap.get(Number(r.usuarioId))?.nunfunc ?? '-',
+      nunvinc: nunfuncMap.get(Number(r.usuarioId))?.nunvinc ?? '-',
+      banco: r.banco,
+      agencia: r.agencia,
+      conta: r.conta,
+      totalCotas: Number(r.totalCotas),
+    }));
+
+    return {
+      id: evento.id,
+      nome_evento: evento.nome_evento,
+      qtd_of_evento: evento.qtd_of_evento,
+      qtd_prc_evento: evento.qtd_prc_evento,
+      status_evento: evento.status_evento,
+      homologado_em: evento.homologado_em,
+      pd_concluida_em: evento.pd_concluida_em,
+      pago_em: evento.pago_em,
+      created_at: evento.created_at,
+      updated_at: evento.updated_at,
+      ome: { id: evento.ome.id, nomeOme: evento.ome.nomeOme },
+      totalCotasOficiais: somaOf,
+      totalCotasPracas: somaPrc,
+      usuarios: usuariosDto,
+    };
+  }
 
   // Metodo que busca o usuario completo com suas relações
   private async getUserCompleto(userId: number): Promise<UserEntity> {

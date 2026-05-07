@@ -1,20 +1,28 @@
 export class UserSearchDto {
-  id: number;
-  pg: string;
-  nomeGuerra: string;
-  tipo: string;
+  id!: number;
+  pg!: string;
+  nomeGuerra!: string;
+  tipo!: string;
   imagemUrl?: string;
-  mat: number;
-  loginSei: string;
+  mat!: number;
+  loginSei!: string;
   phone?: string;
-  typeUser: number;
-  cpf: string;
-  nunfunc: string;
-  nunvinc: string;
-  situacaoSgp: string;
+  typeUser!: number;
+  cpf!: string;
+  nunfunc!: string;
+  nunvinc!: string;
+  situacaoSgp!: string;
 
   ome?: {
     id: number;
     nomeOme: string;
+  };
+
+  // ✅ novo campo
+  conta?: {
+    id: number;
+    banco: string;
+    agencia: string;
+    conta: string;
   };
 }

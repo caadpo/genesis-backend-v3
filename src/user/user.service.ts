@@ -69,6 +69,11 @@ export class UserService {
     const ome = await this.omeRepository.findOne({ where: { id: dto.omeId } });
     if (!ome) throw new NotFoundException('OME não encontrada');
 
+    console.log('Criando usuário com os seguintes dados:', {
+      loginSei: dto.loginSei,
+      typeUser: dto.typeUser,
+    });
+
     const DEFAULT_PASSWORD = 'genesis';
     const hashedPassword = await createPasswordHashed(DEFAULT_PASSWORD);
 
@@ -103,11 +108,12 @@ export class UserService {
       .createQueryBuilder('u')
       .leftJoin('u.ome', 'ome')
       .leftJoin(DadosSgpEntity, 'dsgp', 'dsgp.matsgp = u.mat')
+      .leftJoin('u.conta', 'conta') // ✅ join com conta
       .select([
         'u.id        AS id',
         'u.pg        AS pg',
         'u.ng        AS "nomeGuerra"',
-        'u.tipo        AS "tipo"',
+        'u.tipo      AS "tipo"',
         'u.imagem_url AS "imagemUrl"',
         'u.mat       AS mat',
         'u.loginsei  AS "loginSei"',
@@ -119,6 +125,11 @@ export class UserService {
         'ome.id      AS "ome.id"',
         'ome.nomeome AS "ome.nomeOme"',
         'dsgp.situacaosgp AS "situacaoSgp"',
+        // ✅ dados bancários
+        'conta.id      AS "conta.id"',
+        'conta.banco   AS "conta.banco"',
+        'conta.agencia AS "conta.agencia"',
+        'conta.conta   AS "conta.conta"',
       ]);
 
     if (isNumber) {
@@ -145,9 +156,15 @@ export class UserService {
       nunvinc: raw.nunvinc,
       situacaoSgp: raw.situacaoSgp ?? 'REGULAR',
       ome: raw['ome.id']
+        ? { id: raw['ome.id'], nomeOme: raw['ome.nomeOme'] }
+        : undefined,
+      // ✅ conta só aparece se existir
+      conta: raw['conta.id']
         ? {
-            id: raw['ome.id'],
-            nomeOme: raw['ome.nomeOme'],
+            id: raw['conta.id'],
+            banco: raw['conta.banco'],
+            agencia: raw['conta.agencia'],
+            conta: raw['conta.conta'],
           }
         : undefined,
     };
@@ -201,11 +218,14 @@ export class UserService {
       user.ome = ome;
     }
 
-    if (dto.pg) {
-      user.tipo = this.calcularTipoPorPg(dto.pg);
-    }
-
+    // ✅ Aplica os campos do dto primeiro
     Object.assign(user, dto);
+
+    // ✅ Recalcula o tipo DEPOIS do Object.assign — garante que pg atualizado seja usado
+    // e ignora qualquer tipo que tenha vindo no dto
+    const pgAtual = dto.pg ?? user.pg;
+    user.tipo = this.calcularTipoPorPg(pgAtual);
+
     try {
       return await this.userRepository.save(user);
     } catch (error) {

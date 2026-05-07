@@ -28,10 +28,6 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsString()
-  tipo?: string;
-
-  @IsOptional()
-  @IsString()
   cpf?: string;
 
   @IsOptional()

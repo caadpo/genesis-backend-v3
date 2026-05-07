@@ -33,6 +33,7 @@ export class UserController {
   }
 
   @Get('search')
+  @Roles(UserType.AUXILIAR, UserType.TECNICO, UserType.MASTER)
   async searchUser(@Query('q') q: string): Promise<UserSearchDto | null> {
     return this.userService.findByMatOrNomeGuerra(q);
   }
