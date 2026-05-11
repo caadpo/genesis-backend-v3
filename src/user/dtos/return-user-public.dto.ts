@@ -8,8 +8,8 @@ export class ReturnUserPublicDto {
 
   constructor(user: any) {
     this.id = user.id;
-    this.pg = user.pg;
-    this.nomeGuerra = user.nomeGuerra;
+    this.pg = user.pg ?? ''; // ✅ já funciona se vier do objeto combinado
+    this.nomeGuerra = user.nomeGuerra ?? '';
     this.ome = user.ome ? new ReturnOmeDto(user.ome) : undefined;
   }
 }

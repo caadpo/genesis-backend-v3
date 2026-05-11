@@ -27,16 +27,6 @@ export class UserService {
     private omeRepository: Repository<OmeEntity>,
   ) {}
 
-  private calcularTipoPorPg(pg: string): 'P' | 'O' {
-    const pracas = ['SD', 'CB', '3º SGT', '2º SGT', '1º SGT', 'ST'];
-    const oficiais = ['ASP', '2º TEN', '1º TEN', 'CAP', 'MAJ', 'TC', 'CEL'];
-
-    if (pracas.includes(pg)) return 'P';
-    if (oficiais.includes(pg)) return 'O';
-
-    return 'P';
-  }
-
   private handleUniqueError(error: any): never {
     if (
       error instanceof QueryFailedError &&
@@ -44,50 +34,97 @@ export class UserService {
     ) {
       const constraint = (error as any).driverError?.constraint;
 
-      if (constraint.includes('loginsei')) {
-        throw new BadRequestException('Esse login SEI já está cadastrado');
-      }
-
-      if (constraint.includes('cpf')) {
-        throw new BadRequestException('Esse CPF já está cadastrado');
-      }
-
       if (constraint.includes('mat')) {
-        throw new BadRequestException('Essa matrícula já está cadastrada');
-      }
-
-      if (constraint.includes('nunfunc')) {
-        throw new BadRequestException('Esse Nº Funcional já está cadastrado');
+        throw new BadRequestException('Essa Matrícula já está cadastrada');
       }
     }
 
     throw error;
   }
 
-  // Criar usuário
+  async findByMatOrNomeGuerra(q: string): Promise<UserSearchDto | null> {
+    const isNumber = /^\d+$/.test(q);
+
+    const qb = this.userRepository
+      .createQueryBuilder('u')
+      .leftJoin('u.ome', 'ome')
+      .leftJoin(DadosSgpEntity, 'dsgp', 'dsgp.matsgp = u.mat')
+      .leftJoin('u.conta', 'conta')
+      .select([
+        'u.id          AS id',
+        'u.imagem_url  AS "imagemUrl"',
+        'u.mat         AS mat',
+        'u.phone       AS phone',
+        'u.type_user   AS "typeUser"',
+        // ✅ dados pessoais agora vêm do SGP
+        'dsgp.pgsgp         AS pg',
+        'dsgp.ngsgp         AS "nomeGuerra"',
+        'dsgp.tiposgp       AS tipo',
+        'dsgp.cpfsgp        AS cpf',
+        'dsgp.nunfuncsgp    AS nunfunc',
+        'dsgp.nunvincsgp    AS nunvinc',
+        'dsgp.situacaosgp   AS "situacao"',
+        'dsgp.nomecompletosgp AS "nomeCompleto"',
+        'dsgp.localapresentacaosgp AS "localApresentacao"',
+        // OME
+        'ome.id      AS "ome.id"',
+        'ome.nomeome AS "ome.nomeOme"',
+        // Conta
+        'conta.id      AS "conta.id"',
+        'conta.banco   AS "conta.banco"',
+        'conta.agencia AS "conta.agencia"',
+        'conta.conta   AS "conta.conta"',
+      ]);
+
+    if (isNumber) {
+      qb.where('u.mat = :mat', { mat: q });
+    } else {
+      qb.where('dsgp.ngsgp ILIKE :nome', { nome: `${q}%` });
+    }
+
+    const raw = await qb.getRawOne<any>();
+    if (!raw) return null;
+
+    return {
+      id: raw.id,
+      imagemUrl: raw.imagemUrl,
+      mat: raw.mat,
+      phone: raw.phone,
+      typeUser: raw.typeUser,
+      pg: raw.pg,
+      nomeGuerra: raw.nomeGuerra,
+      tipo: raw.tipo,
+      cpf: raw.cpf,
+      nunfunc: raw.nunfunc,
+      nunvinc: raw.nunvinc,
+      nomeCompleto: raw.nomeCompleto,
+      localApresentacao: raw.localApresentacao,
+      situacao: raw.situacao ?? '',
+      ome: raw['ome.id']
+        ? { id: raw['ome.id'], nomeOme: raw['ome.nomeOme'] }
+        : undefined,
+      conta: raw['conta.id']
+        ? {
+            id: raw['conta.id'],
+            banco: raw['conta.banco'],
+            agencia: raw['conta.agencia'],
+            conta: raw['conta.conta'],
+          }
+        : undefined,
+    };
+  }
+
   async createUser(dto: CreateUserDto): Promise<UserEntity> {
     const ome = await this.omeRepository.findOne({ where: { id: dto.omeId } });
     if (!ome) throw new NotFoundException('OME não encontrada');
-
-    console.log('Criando usuário com os seguintes dados:', {
-      loginSei: dto.loginSei,
-      typeUser: dto.typeUser,
-    });
 
     const DEFAULT_PASSWORD = 'genesis';
     const hashedPassword = await createPasswordHashed(DEFAULT_PASSWORD);
 
     const user: DeepPartial<UserEntity> = {
-      loginSei: dto.loginSei,
+      mat: dto.mat,
       password: hashedPassword,
       typeUser: dto.typeUser,
-      pg: dto.pg,
-      mat: dto.mat,
-      nomeGuerra: dto.nomeGuerra,
-      tipo: this.calcularTipoPorPg(dto.pg),
-      cpf: dto.cpf,
-      nunfunc: dto.nunfunc,
-      nunvinc: dto.nunvinc,
       phone: dto.phone,
       imagemUrl: dto.imagemUrl,
       ome: ome,
@@ -99,75 +136,6 @@ export class UserService {
     } catch (error) {
       this.handleUniqueError(error);
     }
-  }
-
-  async findByMatOrNomeGuerra(q: string): Promise<UserSearchDto | null> {
-    const isNumber = /^\d+$/.test(q);
-
-    const qb = this.userRepository
-      .createQueryBuilder('u')
-      .leftJoin('u.ome', 'ome')
-      .leftJoin(DadosSgpEntity, 'dsgp', 'dsgp.matsgp = u.mat')
-      .leftJoin('u.conta', 'conta') // ✅ join com conta
-      .select([
-        'u.id        AS id',
-        'u.pg        AS pg',
-        'u.ng        AS "nomeGuerra"',
-        'u.tipo      AS "tipo"',
-        'u.imagem_url AS "imagemUrl"',
-        'u.mat       AS mat',
-        'u.loginsei  AS "loginSei"',
-        'u.phone     AS phone',
-        'u.type_user AS "typeUser"',
-        'u.cpf       AS cpf',
-        'u.nunfunc   AS nunfunc',
-        'u.nunvinc   AS nunvinc',
-        'ome.id      AS "ome.id"',
-        'ome.nomeome AS "ome.nomeOme"',
-        'dsgp.situacaosgp AS "situacaoSgp"',
-        // ✅ dados bancários
-        'conta.id      AS "conta.id"',
-        'conta.banco   AS "conta.banco"',
-        'conta.agencia AS "conta.agencia"',
-        'conta.conta   AS "conta.conta"',
-      ]);
-
-    if (isNumber) {
-      qb.where('u.mat = :mat', { mat: Number(q) });
-    } else {
-      qb.where('u.ng ILIKE :nome', { nome: `${q}%` });
-    }
-
-    const raw = await qb.getRawOne<any>();
-    if (!raw) return null;
-
-    return {
-      id: raw.id,
-      pg: raw.pg,
-      nomeGuerra: raw.nomeGuerra,
-      tipo: raw.tipo,
-      imagemUrl: raw.imagemUrl,
-      mat: raw.mat,
-      loginSei: raw.loginSei,
-      phone: raw.phone,
-      typeUser: raw.typeUser,
-      cpf: raw.cpf,
-      nunfunc: raw.nunfunc,
-      nunvinc: raw.nunvinc,
-      situacaoSgp: raw.situacaoSgp ?? 'REGULAR',
-      ome: raw['ome.id']
-        ? { id: raw['ome.id'], nomeOme: raw['ome.nomeOme'] }
-        : undefined,
-      // ✅ conta só aparece se existir
-      conta: raw['conta.id']
-        ? {
-            id: raw['conta.id'],
-            banco: raw['conta.banco'],
-            agencia: raw['conta.agencia'],
-            conta: raw['conta.conta'],
-          }
-        : undefined,
-    };
   }
 
   // Buscar usuário
@@ -188,17 +156,31 @@ export class UserService {
     return user;
   }
 
-  async findUserByLoginSei(loginSei: string): Promise<UserEntity | null> {
-    return this.userRepository.findOne({
-      where: { loginSei },
-      relations: {
-        ome: true,
-        conta: {
-          createdByUser: true,
-          updatedByUser: true,
-        },
-      },
+  async findUserByMat(mat: string): Promise<any | null> {
+    const usuario = await this.userRepository.findOne({
+      where: { mat },
+      relations: { ome: true, conta: true },
     });
+
+    if (!usuario) return null;
+
+    const sgp = await this.dadosSgpRepository.findOne({
+      where: { matSgp: mat },
+    });
+
+    // ✅ retorna objeto combinado user + dados do SGP
+    return {
+      ...usuario,
+      pg: sgp?.pgSgp ?? '',
+      nomeGuerra: sgp?.nomeGuerraSgp ?? '',
+      tipo: sgp?.tipoSgp ?? '',
+      cpf: sgp?.cpfSgp ?? '',
+      nunfunc: sgp?.nunfuncSgp ?? '',
+      nunvinc: sgp?.nunvincSgp ?? '',
+      nomeCompleto: sgp?.nomeCompletoSgp ?? '',
+      localApresentacao: sgp?.localApresentacaoSgp ?? '',
+      situacao: sgp?.situacaoSgp ?? '',
+    };
   }
 
   // Editar usuário
@@ -218,19 +200,8 @@ export class UserService {
       user.ome = ome;
     }
 
-    // ✅ Aplica os campos do dto primeiro
     Object.assign(user, dto);
-
-    // ✅ Recalcula o tipo DEPOIS do Object.assign — garante que pg atualizado seja usado
-    // e ignora qualquer tipo que tenha vindo no dto
-    const pgAtual = dto.pg ?? user.pg;
-    user.tipo = this.calcularTipoPorPg(pgAtual);
-
-    try {
-      return await this.userRepository.save(user);
-    } catch (error) {
-      this.handleUniqueError(error);
-    }
+    return await this.userRepository.save(user);
   }
 
   async changeOwnPassword(

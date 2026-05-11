@@ -2,7 +2,7 @@
 import { UserEntity } from '../../user/entities/user.entity';
 
 export class LoginPayload {
-  sub: number; // padrão JWT (subject)
+  sub: number;
   typeUser: number; // usado no RolesGuard
 
   constructor(user: UserEntity) {

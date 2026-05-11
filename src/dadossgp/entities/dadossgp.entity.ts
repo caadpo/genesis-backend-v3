@@ -1,37 +1,37 @@
-import { Entity, Column, PrimaryColumn, PrimaryGeneratedColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity({ name: 'dadossgp' })
 export class DadosSgpEntity {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
 
-  @Column({ name: 'matsgp', type: 'int' })
-  matSgp: number;
+  @Column({ name: 'matsgp', type: 'varchar' })
+  matSgp!: string;
 
   @Column({ name: 'pgsgp', type: 'varchar' })
-  pgSgp: string;
+  pgSgp!: string;
+
+  @Column({ name: 'tiposgp', type: 'varchar' })
+  tipoSgp!: string;
 
   @Column({ name: 'ngsgp', type: 'varchar' })
-  nomeGuerraSgp: string;
+  nomeGuerraSgp!: string;
 
   @Column({ name: 'nomecompletosgp', type: 'varchar' })
-  nomeCompletoSgp: string;
+  nomeCompletoSgp!: string;
 
-  @Column({ name: 'omesgp', type: 'varchar' })
-  omeSgp: string;
+  @Column({ name: 'cpfsgp', type: 'varchar' })
+  cpfSgp!: string;
 
-  @Column({ name: 'tiposgp', type: 'varchar', length: 1 })
-  tipoSgp: string;
+  @Column({ name: 'nunfuncsgp', type: 'varchar' })
+  nunfuncSgp!: string;
 
-  @Column({ name: 'nunfuncsgp', type: 'int' })
-  nunfuncSgp: number;
-
-  @Column({ name: 'nunvincsgp', type: 'int' })
-  nunvincSgp: number;
+  @Column({ name: 'nunvincsgp', type: 'varchar' })
+  nunvincSgp!: string;
 
   @Column({ name: 'localapresentacaosgp', type: 'varchar' })
-  localApresentacaoSgp: string;
+  localApresentacaoSgp!: string;
 
   @Column({ name: 'situacaosgp', type: 'varchar' })
-  situacaoSgp: string;
+  situacaoSgp!: string;
 }

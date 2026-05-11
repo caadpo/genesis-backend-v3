@@ -5,11 +5,10 @@ import { ReturnContaDto } from 'src/conta/dtos/return-conta.dto';
 export class ReturnUserDto {
   id: number;
   imagemUrl?: string;
-  loginSei: string;
+  mat: string;
   phone: string;
   omeId: number;
   pg: string;
-  mat: number;
   nomeGuerra: string;
   tipo: string;
   cpf: string;
@@ -22,11 +21,10 @@ export class ReturnUserDto {
   constructor(userEntity: any) {
     this.id = userEntity.id;
     this.imagemUrl = userEntity.imagemUrl;
-    this.loginSei = userEntity.loginSei;
+    this.mat = userEntity.mat;
     this.phone = userEntity.phone;
     this.omeId = userEntity.omeId;
     this.pg = userEntity.pg;
-    this.mat = userEntity.mat;
     this.nomeGuerra = userEntity.nomeGuerra;
     this.tipo = userEntity.tipo;
     this.cpf = userEntity.cpf;

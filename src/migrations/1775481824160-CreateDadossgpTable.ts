@@ -8,28 +8,55 @@ export class CreateDadossgpTable1775481824160 implements MigrationInterface {
         columns: [
           {
             name: 'id',
-            type: 'integer',
+            type: 'serial',
             isPrimary: true,
-            isGenerated: true,
-            generationStrategy: 'increment',
           },
-          { name: 'matsgp', type: 'int', isNullable: false },
+          { name: 'matsgp', type: 'varchar', isNullable: false },
           { name: 'pgsgp', type: 'varchar', isNullable: false },
           { name: 'ngsgp', type: 'varchar', isNullable: false },
           { name: 'nomecompletosgp', type: 'varchar', isNullable: false },
-          { name: 'omesgp', type: 'varchar', isNullable: false },
+          { name: 'omesgp', type: 'varchar', isNullable: true },
           { name: 'tiposgp', type: 'varchar', length: '1', isNullable: false },
-          { name: 'nunfuncsgp', type: 'int', isNullable: false },
-          { name: 'nunvincsgp', type: 'int', isNullable: false },
-          { name: 'localapresentacaosgp', type: 'varchar', isNullable: false },
-          { name: 'situacaosgp', type: 'varchar', isNullable: false },
+
+          {
+            name: 'nunfuncsgp',
+            type: 'varchar',
+            length: '10',
+            isNullable: true,
+          },
+          {
+            name: 'nunvincsgp',
+            type: 'varchar',
+            length: '10',
+            isNullable: true,
+          },
+          { name: 'cpfsgp', type: 'varchar', length: '11', isNullable: true },
+          { name: 'localapresentacaosgp', type: 'varchar', isNullable: true },
+          {
+            name: 'situacaosgp',
+            type: 'varchar',
+            isNullable: false,
+            default: `'REGULAR'`,
+          },
         ],
       }),
       true,
     );
+
+    // ✅ índice para busca por matrícula (join frequente com user)
+    await queryRunner.query(
+      `CREATE INDEX "IDX_dadossgp_matsgp" ON "dadossgp" ("matsgp")`,
+    );
+
+    // ✅ índice para busca por nome de guerra
+    await queryRunner.query(
+      `CREATE INDEX "IDX_dadossgp_ngsgp" ON "dadossgp" ("ngsgp")`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_dadossgp_matsgp"`);
+    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_dadossgp_ngsgp"`);
     await queryRunner.dropTable('dadossgp');
   }
 }

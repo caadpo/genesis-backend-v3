@@ -10,34 +10,10 @@ import { UserType } from '../enum/user-type.enum';
 export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
-  loginSei!: string;
+  mat!: string;
 
   @IsEnum(UserType)
   typeUser!: UserType;
-
-  @IsString()
-  @IsNotEmpty()
-  pg!: string;
-
-  @IsNumber()
-  @IsNotEmpty()
-  mat!: number;
-
-  @IsString()
-  @IsNotEmpty()
-  nomeGuerra!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  cpf!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  nunfunc!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  nunvinc!: string;
 
   @IsOptional()
   @IsString()

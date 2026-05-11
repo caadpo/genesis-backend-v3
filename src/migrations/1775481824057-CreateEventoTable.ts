@@ -45,7 +45,6 @@ export class CreateEventoTable1775481824057 implements MigrationInterface {
             type: 'int',
             isNullable: false,
           },
-
           {
             name: 'status_evento',
             type: 'enum',
@@ -53,10 +52,15 @@ export class CreateEventoTable1775481824057 implements MigrationInterface {
             default: `'CRIADO'`,
           },
 
-          // 🔥 TIMESTAMPS DE TRANSIÇÃO
+          // ─── Timestamps de transição ──────────────────────────────────
           {
             name: 'homologado_em',
             type: 'timestamp',
+            isNullable: true,
+          },
+          {
+            name: 'homologado_por_id',
+            type: 'int',
             isNullable: true,
           },
           {
@@ -65,8 +69,18 @@ export class CreateEventoTable1775481824057 implements MigrationInterface {
             isNullable: true,
           },
           {
+            name: 'pd_concluida_por_id',
+            type: 'int',
+            isNullable: true,
+          },
+          {
             name: 'pago_em',
             type: 'timestamp',
+            isNullable: true,
+          },
+          {
+            name: 'pago_por_id',
+            type: 'int',
             isNullable: true,
           },
 
@@ -85,6 +99,7 @@ export class CreateEventoTable1775481824057 implements MigrationInterface {
       }),
     );
 
+    // ─── Índices ──────────────────────────────────────────────────────────────
     await queryRunner.createIndex(
       'evento',
       new TableIndex({
@@ -117,6 +132,7 @@ export class CreateEventoTable1775481824057 implements MigrationInterface {
       }),
     );
 
+    // ─── Foreign Keys ─────────────────────────────────────────────────────────
     await queryRunner.createForeignKey(
       'evento',
       new TableForeignKey({
@@ -144,6 +160,36 @@ export class CreateEventoTable1775481824057 implements MigrationInterface {
         referencedTableName: 'user',
         referencedColumnNames: ['id'],
         onDelete: 'RESTRICT',
+      }),
+    );
+
+    await queryRunner.createForeignKey(
+      'evento',
+      new TableForeignKey({
+        columnNames: ['homologado_por_id'],
+        referencedTableName: 'user',
+        referencedColumnNames: ['id'],
+        onDelete: 'SET NULL',
+      }),
+    );
+
+    await queryRunner.createForeignKey(
+      'evento',
+      new TableForeignKey({
+        columnNames: ['pd_concluida_por_id'],
+        referencedTableName: 'user',
+        referencedColumnNames: ['id'],
+        onDelete: 'SET NULL',
+      }),
+    );
+
+    await queryRunner.createForeignKey(
+      'evento',
+      new TableForeignKey({
+        columnNames: ['pago_por_id'],
+        referencedTableName: 'user',
+        referencedColumnNames: ['id'],
+        onDelete: 'SET NULL',
       }),
     );
   }

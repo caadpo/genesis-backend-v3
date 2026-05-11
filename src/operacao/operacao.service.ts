@@ -16,12 +16,16 @@ import { CreateOperacaoDto } from './dtos/create-operacao.dto';
 import { UpdateOperacaoDto } from './dtos/update-operacao.dto';
 import { ReturnOperacaoResumoDto } from './dtos/return-operacao-resumo.dto';
 import { UserType } from 'src/user/enum/user-type.enum'; // ✅
+import { EscalaEntity } from 'src/escala/entities/escala.entity';
 
 @Injectable()
 export class OperacaoService {
   constructor(
     @InjectRepository(Operacao)
     private readonly operacaoRepo: Repository<Operacao>,
+
+    @InjectRepository(EscalaEntity)
+    private readonly escalaRepo: Repository<EscalaEntity>,
 
     @InjectRepository(Evento)
     private readonly eventoRepo: Repository<Evento>,
@@ -274,9 +278,18 @@ export class OperacaoService {
     const operacao = await this.findOne(id);
 
     this.validarStatusEvento(operacao.evento);
-
-    // ✅ Auxiliar só pode excluir operações de eventos da sua OME
     await this.validarPermissaoOme(authUser, operacao.evento.ome.id);
+
+    // ✅ impede exclusão se houver escalas vinculadas
+    const qtdEscalas = await this.escalaRepo.count({
+      where: { operacao: { id } },
+    });
+
+    if (qtdEscalas > 0) {
+      throw new BadRequestException(
+        `Não é possível excluir a operação pois há ${qtdEscalas} escala(s) vinculada(s). Exclua as escalas primeiro.`,
+      );
+    }
 
     await this.operacaoRepo.delete(id);
   }

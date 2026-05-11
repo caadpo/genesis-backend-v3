@@ -22,8 +22,8 @@ export class EscalaEntity {
   @Column({ type: 'enum', enum: Sistema })
   sistema!: Sistema;
 
-  @Column({ type: 'integer' })
-  mat!: number;
+  @Column({ type: 'varchar' })
+  mat!: string;
 
   @ManyToOne(() => Operacao, { nullable: false })
   @JoinColumn({ name: 'operacao_id' })

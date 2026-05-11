@@ -1,24 +1,25 @@
 export class UserSearchDto {
   id!: number;
+  mat!: string;
+  phone?: string;
+  typeUser!: number;
+  imagemUrl?: string;
+  // ✅ agora vêm do SGP
   pg!: string;
   nomeGuerra!: string;
   tipo!: string;
-  imagemUrl?: string;
-  mat!: number;
-  loginSei!: string;
-  phone?: string;
-  typeUser!: number;
   cpf!: string;
   nunfunc!: string;
   nunvinc!: string;
-  situacaoSgp!: string;
+  nomeCompleto!: string;
+  localApresentacao!: string;
+  situacao!: string;
 
   ome?: {
     id: number;
     nomeOme: string;
   };
 
-  // ✅ novo campo
   conta?: {
     id: number;
     banco: string;

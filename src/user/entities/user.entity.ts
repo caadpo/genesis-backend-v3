@@ -14,10 +14,7 @@ import { OmeEntity } from 'src/ome/entities/ome.entity';
 import { ContaEntity } from 'src/conta/entities/conta.entity';
 
 @Entity({ name: 'user' })
-@Index(['loginSei'], { unique: true })
 @Index(['mat'], { unique: true })
-@Index(['cpf'], { unique: true })
-@Index(['nunfunc'], { unique: true })
 export class UserEntity {
   @PrimaryGeneratedColumn('rowid')
   id!: number;
@@ -25,38 +22,17 @@ export class UserEntity {
   @Column({ name: 'imagem_url', nullable: true })
   imagemUrl!: string;
 
-  @Column({ name: 'loginsei', nullable: false })
-  loginSei!: string;
+  @Column({ name: 'mat', nullable: false })
+  mat!: string;
 
   @Column({ name: 'password', nullable: false })
   password!: string;
-
-  @Column({ name: 'pg', nullable: false })
-  pg!: string;
-
-  @Column({ name: 'mat', nullable: false })
-  mat!: number;
-
-  @Column({ name: 'ng', nullable: false })
-  nomeGuerra!: string;
-
-  @Column({ name: 'tipo', nullable: false })
-  tipo!: string;
 
   @Column({ name: 'omeid', nullable: false })
   omeId!: number;
 
   @Column({ name: 'phone' })
   phone!: string;
-
-  @Column({ name: 'cpf', length: 11 })
-  cpf!: string;
-
-  @Column({ name: 'nunfunc', length: 10 })
-  nunfunc!: string;
-
-  @Column({ name: 'nunvinc', length: 10 })
-  nunvinc!: string;
 
   // 🔹 NÍVEL DO USUÁRIO (hierarquia)
   @Column({

@@ -10,7 +10,7 @@ export class DadosSgpService {
     private readonly dadosSgpRepository: Repository<DadosSgpEntity>,
   ) {}
 
-  async buscarPorMatricula(matSgp: number): Promise<DadosSgpEntity> {
+  async buscarPorMatricula(matSgp: string): Promise<DadosSgpEntity> {
     const dados = await this.dadosSgpRepository.findOne({
       where: { matSgp },
     });

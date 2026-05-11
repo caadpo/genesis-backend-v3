@@ -8,7 +8,7 @@ export class DadosSgpController {
 
   @Get(':matSgp')
   async getDadosPorMatricula(
-    @Param('matSgp', ParseIntPipe) matSgp: number,
+    @Param('matSgp', ParseIntPipe) matSgp: string,
   ): Promise<DadosSgpEntity> {
     return this.dadosSgpService.buscarPorMatricula(matSgp);
   }

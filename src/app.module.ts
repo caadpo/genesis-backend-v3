@@ -15,6 +15,7 @@ import { ContaModule } from './conta/conta.module';
 import { DadossgpModule } from './dadossgp/dadossgp.module';
 import { ConfigModule } from '@nestjs/config';
 import { EscalaModule } from './escala/escala.module';
+import { PagamentoModule } from './pagamento/pagamento.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { EscalaModule } from './escala/escala.module';
     ContaModule,
     DadossgpModule,
     EscalaModule,
+    PagamentoModule,
   ],
   controllers: [AppController],
   providers: [AppService],

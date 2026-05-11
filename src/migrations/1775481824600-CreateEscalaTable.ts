@@ -21,7 +21,7 @@ export class CreateEscalaTable1775481824600 implements MigrationInterface {
           },
 
           // ─── Referências ──────────────────────────────────────────────────
-          { name: 'mat', type: 'integer', isNullable: false },
+          { name: 'mat', type: 'varchar', isNullable: false },
           { name: 'operacao_id', type: 'integer', isNullable: false },
           { name: 'usuario_id', type: 'integer', isNullable: false },
 

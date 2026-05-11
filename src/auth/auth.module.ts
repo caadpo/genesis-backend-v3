@@ -10,12 +10,13 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { UserEntity } from '../user/entities/user.entity';
 import { UserModule } from '../user/user.module';
+import { DadosSgpEntity } from 'src/dadossgp/entities/dadossgp.entity';
 
 @Module({
   imports: [
     ConfigModule,
     PassportModule,
-    TypeOrmModule.forFeature([UserEntity]),
+    TypeOrmModule.forFeature([UserEntity, DadosSgpEntity]),
     UserModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

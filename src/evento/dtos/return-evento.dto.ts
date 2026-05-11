@@ -7,10 +7,9 @@ export class ReturnEventoDto {
   qtd_of_evento: number;
   qtd_prc_evento: number;
   status_evento: string;
-
   created_at: string;
   updated_at: string;
-
+  homologado_em?: Date; // ✅ adicionar
   ome: ReturnOmeDto;
   user: ReturnUserPublicDto;
 
@@ -20,10 +19,9 @@ export class ReturnEventoDto {
     this.qtd_of_evento = evento.qtd_of_evento;
     this.qtd_prc_evento = evento.qtd_prc_evento;
     this.status_evento = evento.status_evento;
-
     this.created_at = evento.created_at;
     this.updated_at = evento.updated_at;
-
+    this.homologado_em = evento.homologado_em ?? undefined; // ✅ adicionar
     this.ome = new ReturnOmeDto(evento.ome);
     this.user = new ReturnUserPublicDto(evento.user);
   }

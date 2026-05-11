@@ -3,7 +3,7 @@ import { EscalaEntity } from '../entities/escala.entity';
 export class ReturnEscalaDto {
   id: number;
   sistema: string;
-  mat: number;
+  mat: string;
   pg_escala: string;
   tipo_escala: string;
   nome_escala: string;

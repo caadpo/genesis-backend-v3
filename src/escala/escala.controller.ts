@@ -27,7 +27,7 @@ export class EscalaController {
 
   @Get('matricula/:mat')
   findByMatricula(
-    @Param('mat', ParseIntPipe) mat: number,
+    @Param('mat') mat: string,
     @Query('sistema') sistema: string,
     @Query('mes') mes?: string,
     @Query('ano') ano?: string,

@@ -4,7 +4,7 @@ import { UserType } from '../enum/user-type.enum';
 export class UpdateUserDto {
   @IsOptional()
   @IsString()
-  loginSei?: string;
+  mat?: string;
 
   @IsOptional()
   @IsString()
@@ -13,30 +13,6 @@ export class UpdateUserDto {
   @IsOptional()
   @IsEnum(UserType)
   typeUser?: UserType;
-
-  @IsOptional()
-  @IsString()
-  pg?: string;
-
-  @IsOptional()
-  @IsNumber()
-  mat?: number;
-
-  @IsOptional()
-  @IsString()
-  nomeGuerra?: string;
-
-  @IsOptional()
-  @IsString()
-  cpf?: string;
-
-  @IsOptional()
-  @IsString()
-  nunfunc?: string;
-
-  @IsOptional()
-  @IsString()
-  nunvinc?: string;
 
   @IsOptional()
   @IsString()

@@ -14,28 +14,28 @@ import { DiretoriaEntity } from 'src/diretoria/entities/diretoria.entity';
 @Entity('distribuicao')
 export class Distribuicao {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
 
   @ManyToOne(() => Teto, { nullable: false })
   @JoinColumn({ name: 'teto_id' })
-  teto: Teto;
+  teto!: Teto;
 
   @ManyToOne(() => DiretoriaEntity, { nullable: false })
   @JoinColumn({ name: 'diretoria_id' })
-  diretoria: DiretoriaEntity;
+  diretoria!: DiretoriaEntity;
 
   @Column({ type: 'varchar', length: 100 })
-  nome_dist: string;
+  nome_dist!: string;
 
   @Column({ type: 'int' })
-  qtd_dist_of: number;
+  qtd_dist_of!: number;
 
   @Column({ type: 'int' })
-  qtd_dist_prc: number;
+  qtd_dist_prc!: number;
 
   @CreateDateColumn({ type: 'timestamp' })
-  created_at: Date;
+  created_at!: Date;
 
   @UpdateDateColumn({ type: 'timestamp' })
-  updated_at: Date;
+  updated_at!: Date;
 }

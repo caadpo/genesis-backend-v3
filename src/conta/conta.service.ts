@@ -35,9 +35,10 @@ export class ContaService {
 
     if (
       user.typeUser === UserType.AUXILIAR &&
+      UserType.FINANCEIRO &&
       user.omeId !== usuarioAlvo.omeId
     ) {
-      throw new ForbiddenException('OME diferente');
+      throw new ForbiddenException('Policial não pertence a sua UNIDADE');
     }
   }
 
@@ -93,14 +94,14 @@ export class ContaService {
       createdBy: conta.createdByUser
         ? {
             id: conta.createdByUser.id,
-            loginSei: conta.createdByUser.loginSei,
+            mat: conta.createdByUser.mat,
           }
         : null,
 
       updatedBy: conta.updatedByUser
         ? {
             id: conta.updatedByUser.id,
-            loginSei: conta.updatedByUser.loginSei,
+            mat: conta.updatedByUser.mat,
           }
         : null,
     } as ReturnContaDto;

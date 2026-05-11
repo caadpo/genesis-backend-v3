@@ -16,7 +16,7 @@ export class AuthService {
   ) {}
 
   async login(loginDto: LoginDto) {
-    const user = await this.userService.findUserByLoginSei(loginDto.loginSei);
+    const user = await this.userService.findUserByMat(loginDto.mat);
 
     if (!user) {
       throw new UnauthorizedException('Login ou senha inválidos');

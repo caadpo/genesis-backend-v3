@@ -14,6 +14,7 @@ import { ReturnEscalaDto } from './dtos/return-escala.dto';
 import { UserEntity } from 'src/user/entities/user.entity';
 import { Operacao } from 'src/operacao/entities/operacao.entity';
 import { UserType } from 'src/user/enum/user-type.enum';
+import { DadosSgpEntity } from 'src/dadossgp/entities/dadossgp.entity';
 
 @Injectable()
 export class EscalaService {
@@ -26,7 +27,43 @@ export class EscalaService {
 
     @InjectRepository(Operacao)
     private readonly operacaoRepo: Repository<Operacao>,
+
+    @InjectRepository(DadosSgpEntity)
+    private readonly dadosSgpRepo: Repository<DadosSgpEntity>,
   ) {}
+
+  // ─── Método para buscar dados combinados: ───────────────────────────────────────
+
+  // ✅ Uma única query traz user + sgp + ome + conta
+  private async buscarDadosParaEscala(usuarioId: number): Promise<{
+    usuario: UserEntity;
+    sgp: DadosSgpEntity | null;
+  }> {
+    const row = await this.userRepo
+      .createQueryBuilder('u')
+      .leftJoinAndMapOne('u.conta', 'u.conta', 'conta')
+      .leftJoinAndMapOne('u.ome', 'u.ome', 'ome')
+      .where('u.id = :id', { id: usuarioId })
+      .getOne();
+
+    if (!row) throw new NotFoundException('Usuário não encontrado');
+
+    const sgp = await this.dadosSgpRepo.findOne({
+      where: { matSgp: row.mat },
+      select: {
+        pgSgp: true,
+        nomeGuerraSgp: true,
+        tipoSgp: true,
+        cpfSgp: true,
+        nunfuncSgp: true,
+        nunvincSgp: true,
+        localApresentacaoSgp: true,
+        situacaoSgp: true,
+      },
+    });
+
+    return { usuario: row, sgp };
+  }
 
   // ─── Verificação de OME para AUXILIAR ───────────────────────────────────────
   private async verificarPermissaoOme(
@@ -58,7 +95,7 @@ export class EscalaService {
 
   // ─── Verificação de conflito ─────────────────────────────────────────────────
   private async verificarConflito(
-    mat: number,
+    mat: string,
     dataInicio: string,
     sistema: string,
     excludeId?: number,
@@ -86,19 +123,26 @@ export class EscalaService {
     novaCota: number,
     excludeId?: number,
   ): Promise<void> {
-    const operacao = await this.operacaoRepo.findOneBy({ id: operacaoId });
+    // ✅ duas queries paralelas — sem problema de GROUP BY
+    const [operacao, somaResult] = await Promise.all([
+      this.operacaoRepo.findOneBy({ id: operacaoId }),
+
+      (() => {
+        const qb = this.repo
+          .createQueryBuilder('e')
+          .select('COALESCE(SUM(e.cota_escala), 0)', 'soma')
+          .where('e.operacao_id = :operacaoId', { operacaoId })
+          .andWhere('e.tipo_escala = :tipoEscala', { tipoEscala });
+
+        if (excludeId) qb.andWhere('e.id != :excludeId', { excludeId });
+
+        return qb.getRawOne();
+      })(),
+    ]);
+
     if (!operacao) throw new NotFoundException('Operação não encontrada');
 
-    const qb = this.repo
-      .createQueryBuilder('e')
-      .select('COALESCE(SUM(e.cota_escala), 0)', 'soma')
-      .where('e.operacao_id = :operacaoId', { operacaoId })
-      .andWhere('e.tipo_escala = :tipoEscala', { tipoEscala });
-
-    if (excludeId) qb.andWhere('e.id != :excludeId', { excludeId });
-
-    const { soma } = await qb.getRawOne();
-    const somaAtual = Number(soma);
+    const somaAtual = Number(somaResult.soma);
 
     if (
       tipoEscala === 'O' &&
@@ -116,35 +160,64 @@ export class EscalaService {
     }
   }
 
+  // ─── Verificação de status do evento ────────────────────────────────────────
+  private async verificarStatusEvento(operacaoId: number): Promise<void> {
+    const operacao = await this.operacaoRepo.findOne({
+      where: { id: operacaoId },
+      relations: { evento: true },
+    });
+
+    if (!operacao) throw new NotFoundException('Operação não encontrada');
+
+    const status = operacao.evento.status_evento;
+
+    if (status !== 'CRIADO') {
+      const statusFormatado =
+        status === 'HOMOLOGADO'
+          ? 'Homologado'
+          : status === 'PD_CONCLUIDA'
+            ? 'com PD Concluída'
+            : status === 'PAGO'
+              ? 'Pago'
+              : status;
+
+      throw new ForbiddenException(
+        `Ação não permitida. Este evento está ${statusFormatado}`,
+      );
+    }
+  }
+
   // ─── CREATE ─────────────────────────────────────────────────────────────────
   async create(
     dto: CreateEscalaDto,
     usuarioLogado: { id: number; typeUser: number; omeId: number },
   ): Promise<ReturnEscalaDto> {
-    // ✅ Verifica permissão de OME antes de qualquer coisa
-    await this.verificarPermissaoOme(dto.operacaoId, usuarioLogado);
+    // ✅ removida a chamada duplicada de verificarPermissaoOme que estava aqui
 
-    const usuario = await this.userRepo.findOne({
-      where: { id: dto.usuarioId },
-      relations: { ome: true, conta: true },
-    });
-    if (!usuario) throw new NotFoundException('Usuário não encontrado');
+    const [{ usuario, sgp }] = await Promise.all([
+      this.buscarDadosParaEscala(dto.usuarioId),
+      this.verificarPermissaoOme(dto.operacaoId, usuarioLogado),
+      this.verificarStatusEvento(dto.operacaoId),
+    ]);
 
-    await this.verificarConflito(usuario.mat, dto.dataInicio, dto.sistema);
-
+    const tipoEscala = sgp?.tipoSgp ?? 'P';
     const cota = this.calcularCota(dto.horaInicio, dto.horaFim);
-    await this.verificarTeto(dto.operacaoId, usuario.tipo, cota);
+
+    await Promise.all([
+      this.verificarConflito(usuario.mat, dto.dataInicio, dto.sistema),
+      this.verificarTeto(dto.operacaoId, tipoEscala, cota),
+    ]);
 
     const escala = this.repo.create({
       sistema: dto.sistema,
       mat: usuario.mat,
       operacao: { id: dto.operacaoId },
       usuario: { id: dto.usuarioId },
-      cpf_escala: usuario.cpf,
-      pg_escala: usuario.pg,
-      tipo_escala: usuario.tipo,
-      nome_escala: usuario.nomeGuerra,
-      phone_escala: usuario.phone,
+      cpf_escala: sgp?.cpfSgp ?? '',
+      pg_escala: sgp?.pgSgp ?? '',
+      tipo_escala: tipoEscala,
+      nome_escala: sgp?.nomeGuerraSgp ?? '',
+      phone_escala: usuario.phone ?? '',
       nomeome_escala: usuario.ome?.nomeOme ?? '',
       banco_escala: usuario.conta?.banco ?? '',
       agencia_escala: usuario.conta?.agencia ?? '',
@@ -153,16 +226,96 @@ export class EscalaService {
       horaInicio: dto.horaInicio,
       horaFim: dto.horaFim,
       cota_escala: cota,
-      localApresentacao: dto.localApresentacao ?? 'SEDE DA OME',
+      localApresentacao:
+        dto.localApresentacao ?? sgp?.localApresentacaoSgp ?? 'SEDE DA OME',
       funcao: dto.funcao,
       situacao: dto.situacao ?? 'REGULAR',
       anotacoes: dto.anotacoes,
     });
 
-    console.log('Escala a ser salva:', escala); // ✅ log para debug
+    try {
+      const saved = await this.repo.save(escala);
+      return this.findOne(saved.id); // ✅ dentro do try, onde saved existe
+    } catch (error: unknown) {
+      // ✅ cast correto para acessar driverError sem erro de TypeScript
+      const dbError = error as { driverError?: { code?: string } };
+      if (dbError?.driverError?.code === '23505') {
+        throw new BadRequestException(
+          `Matrícula ${escala.mat} já está escalada nesta data para o sistema ${escala.sistema}`,
+        );
+      }
+      throw error;
+    }
+  }
 
-    const saved = await this.repo.save(escala);
-    return this.findOne(saved.id);
+  // ─── UPDATE ──────────────────────────────────────────────────────────────────
+  async update(
+    id: number,
+    dto: UpdateEscalaDto,
+    usuarioLogado: { id: number; typeUser: number; omeId: number },
+  ): Promise<ReturnEscalaDto> {
+    const escala = await this.repo.findOne({
+      where: { id },
+      relations: { operacao: true },
+    });
+    if (!escala) throw new NotFoundException('Escala não encontrada');
+
+    const operacaoId = dto.operacaoId ?? escala.operacao.id;
+
+    // ✅ índice [0]=permissão(void), [1]=status(void), [2]=dadosNovos
+    const [, , dadosNovos] = await Promise.all([
+      this.verificarPermissaoOme(operacaoId, usuarioLogado),
+      this.verificarStatusEvento(operacaoId),
+      dto.usuarioId
+        ? this.buscarDadosParaEscala(dto.usuarioId)
+        : Promise.resolve(null),
+    ]);
+
+    // ✅ usa dadosNovos do Promise.all — sem segunda chamada a buscarDadosParaEscala
+    if (dadosNovos) {
+      const { usuario, sgp } = dadosNovos;
+      escala.mat = usuario.mat;
+      escala.cpf_escala = sgp?.cpfSgp ?? '';
+      escala.pg_escala = sgp?.pgSgp ?? '';
+      escala.tipo_escala = sgp?.tipoSgp ?? 'P';
+      escala.nome_escala = sgp?.nomeGuerraSgp ?? '';
+      escala.phone_escala = usuario.phone ?? '';
+      escala.nomeome_escala = usuario.ome?.nomeOme ?? '';
+      escala.banco_escala = usuario.conta?.banco ?? '';
+      escala.agencia_escala = usuario.conta?.agencia ?? '';
+      escala.conta_escala = usuario.conta?.conta ?? '';
+      escala.usuario = { id: dto.usuarioId } as UserEntity;
+    }
+
+    const novaData = dto.dataInicio ?? escala.dataInicio;
+    const novaSistema = dto.sistema ?? escala.sistema;
+    const novaHoraInicio = dto.horaInicio ?? escala.horaInicio;
+    const novaHoraFim = dto.horaFim ?? escala.horaFim;
+    const novaCota = this.calcularCota(novaHoraInicio, novaHoraFim);
+
+    // ✅ conflito e teto em paralelo
+    await Promise.all([
+      this.verificarConflito(escala.mat, novaData, novaSistema, id),
+      this.verificarTeto(operacaoId, escala.tipo_escala, novaCota, id),
+    ]);
+
+    Object.assign(escala, {
+      ...(dto.dataInicio && { dataInicio: dto.dataInicio }),
+      ...(dto.horaInicio && { horaInicio: dto.horaInicio }),
+      ...(dto.horaFim && { horaFim: dto.horaFim }),
+      cota_escala: novaCota,
+      ...(dto.localApresentacao && {
+        localApresentacao: dto.localApresentacao,
+      }),
+      ...(dto.funcao && { funcao: dto.funcao }),
+      ...(dto.situacao && { situacao: dto.situacao }),
+      ...(dto.anotacoes !== undefined && { anotacoes: dto.anotacoes }),
+      ...(dto.operacaoId && { operacao: { id: dto.operacaoId } }),
+      ...(dto.sistema && { sistema: dto.sistema }),
+    });
+
+    await this.repo.save(escala);
+    return this.findOne(id);
   }
 
   // ─── FIND BY OPERACAO ────────────────────────────────────────────────────────
@@ -185,7 +338,7 @@ export class EscalaService {
 
   // ─── FIND BY MATRICULA — PJES ────────────────────────────────────────────────
   async findByMatriculaPjes(
-    mat: number,
+    mat: string,
     mes: number,
     ano: number,
   ): Promise<ReturnEscalaDto[]> {
@@ -204,7 +357,7 @@ export class EscalaService {
 
   // ─── FIND BY MATRICULA — DIARIAS ─────────────────────────────────────────────
   async findByMatriculaDiarias(
-    mat: number,
+    mat: string,
     dataInicio: string,
     dataFim: string,
   ): Promise<ReturnEscalaDto[]> {
@@ -223,71 +376,6 @@ export class EscalaService {
     return escalas.map((e) => new ReturnEscalaDto(e));
   }
 
-  // ─── UPDATE ──────────────────────────────────────────────────────────────────
-  async update(
-    id: number,
-    dto: UpdateEscalaDto,
-    usuarioLogado: { id: number; typeUser: number; omeId: number },
-  ): Promise<ReturnEscalaDto> {
-    const escala = await this.repo.findOne({
-      where: { id },
-      relations: { operacao: true },
-    });
-    if (!escala) throw new NotFoundException('Escala não encontrada');
-
-    const operacaoId = dto.operacaoId ?? escala.operacao.id;
-
-    // ✅ Verifica permissão de OME
-    await this.verificarPermissaoOme(operacaoId, usuarioLogado);
-
-    if (dto.usuarioId) {
-      const usuario = await this.userRepo.findOne({
-        where: { id: dto.usuarioId },
-        relations: { ome: true, conta: true },
-      });
-      if (!usuario) throw new NotFoundException('Usuário não encontrado');
-
-      escala.mat = usuario.mat;
-      escala.cpf_escala = usuario.cpf;
-      escala.pg_escala = usuario.pg;
-      escala.tipo_escala = usuario.tipo;
-      escala.nome_escala = usuario.nomeGuerra;
-      escala.phone_escala = usuario.phone;
-      escala.nomeome_escala = usuario.ome?.nomeOme ?? '';
-      escala.banco_escala = usuario.conta?.banco ?? '';
-      escala.agencia_escala = usuario.conta?.agencia ?? '';
-      escala.conta_escala = usuario.conta?.conta ?? '';
-      escala.usuario = { id: dto.usuarioId } as UserEntity;
-    }
-
-    const novaData = dto.dataInicio ?? escala.dataInicio;
-    const novaSistema = dto.sistema ?? escala.sistema;
-    const novaHoraInicio = dto.horaInicio ?? escala.horaInicio;
-    const novaHoraFim = dto.horaFim ?? escala.horaFim;
-    const novaCota = this.calcularCota(novaHoraInicio, novaHoraFim);
-
-    await this.verificarConflito(escala.mat, novaData, novaSistema, id);
-    await this.verificarTeto(operacaoId, escala.tipo_escala, novaCota, id);
-
-    Object.assign(escala, {
-      ...(dto.dataInicio && { dataInicio: dto.dataInicio }),
-      ...(dto.horaInicio && { horaInicio: dto.horaInicio }),
-      ...(dto.horaFim && { horaFim: dto.horaFim }),
-      cota_escala: novaCota,
-      ...(dto.localApresentacao && {
-        localApresentacao: dto.localApresentacao,
-      }),
-      ...(dto.funcao && { funcao: dto.funcao }),
-      ...(dto.situacao && { situacao: dto.situacao }),
-      ...(dto.anotacoes !== undefined && { anotacoes: dto.anotacoes }),
-      ...(dto.operacaoId && { operacao: { id: dto.operacaoId } }),
-      ...(dto.sistema && { sistema: dto.sistema }),
-    });
-
-    await this.repo.save(escala);
-    return this.findOne(id);
-  }
-
   // ─── DELETE ──────────────────────────────────────────────────────────────────
   async remove(
     id: number,
@@ -299,8 +387,10 @@ export class EscalaService {
     });
     if (!escala) throw new NotFoundException('Escala não encontrada');
 
-    // ✅ Verifica permissão de OME também no delete
-    await this.verificarPermissaoOme(escala.operacao.id, usuarioLogado);
+    await Promise.all([
+      this.verificarPermissaoOme(escala.operacao.id, usuarioLogado),
+      this.verificarStatusEvento(escala.operacao.id), // ✅ adicionar
+    ]);
 
     await this.repo.delete(id);
   }

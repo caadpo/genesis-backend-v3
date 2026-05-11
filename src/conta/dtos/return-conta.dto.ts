@@ -10,12 +10,12 @@ export class ReturnContaDto {
 
   createdByUser?: {
     id: number;
-    loginSei: string;
+    mat: string;
   };
 
   updatedByUser?: {
     id: number;
-    loginSei: string;
+    mat: string;
   };
 
   constructor(conta: ContaEntity) {
@@ -29,14 +29,14 @@ export class ReturnContaDto {
     this.createdByUser = conta.createdByUser
       ? {
           id: conta.createdByUser.id,
-          loginSei: conta.createdByUser.loginSei,
+          mat: conta.createdByUser.mat,
         }
       : undefined;
 
     this.updatedByUser = conta.updatedByUser
       ? {
           id: conta.updatedByUser.id,
-          loginSei: conta.updatedByUser.loginSei,
+          mat: conta.updatedByUser.mat,
         }
       : undefined;
   }
