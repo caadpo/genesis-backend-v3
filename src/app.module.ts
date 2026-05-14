@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import * as Joi from 'joi';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TetosModule } from './tetos/teto.module';
 import { UserModule } from './user/user.module';
 import { DiretoriaModule } from './diretoria/diretoria.module';
@@ -16,6 +17,7 @@ import { DadossgpModule } from './dadossgp/dadossgp.module';
 import { ConfigModule } from '@nestjs/config';
 import { EscalaModule } from './escala/escala.module';
 import { PagamentoModule } from './pagamento/pagamento.module';
+import { RepasseModule } from './repasse/repasse.module';
 
 @Module({
   imports: [
@@ -49,6 +51,8 @@ import { PagamentoModule } from './pagamento/pagamento.module';
       migrationsRun: process.env.NODE_ENV !== 'production',
     }),
 
+    ScheduleModule.forRoot(),
+
     TetosModule,
     UserModule,
     DiretoriaModule,
@@ -61,6 +65,7 @@ import { PagamentoModule } from './pagamento/pagamento.module';
     DadossgpModule,
     EscalaModule,
     PagamentoModule,
+    RepasseModule,
   ],
   controllers: [AppController],
   providers: [AppService],

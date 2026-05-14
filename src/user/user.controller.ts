@@ -20,6 +20,7 @@ import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/guards/roles.guard';
 import { UserSearchDto } from './dtos/user-search.dto';
 import { ChangePasswordDto } from './dtos/change-password.dto';
+import { UpdatePhoneDto } from './dtos/update-phone.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('user')
@@ -68,6 +69,19 @@ export class UserController {
   async resetPassword(@Param('id') id: number, @Request() req: any) {
     await this.userService.resetPasswordToGenesis(req.user.id, id);
     return { message: 'Senha resetada para o padrão genesis' };
+  }
+
+  @Put('me/imagem')
+  async updateOwnImagem(
+    @Request() req: any,
+    @Body() body: { imagemUrl: string },
+  ) {
+    return this.userService.updateOwnImagem(req.user.id, body.imagemUrl);
+  }
+
+  @Put('me/phone')
+  async updateOwnPhone(@Request() req: any, @Body() dto: UpdatePhoneDto) {
+    return this.userService.updateOwnPhone(req.user.id, dto.phone);
   }
 
   @Delete(':id')

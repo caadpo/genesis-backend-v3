@@ -246,6 +246,23 @@ export class UserService {
     await this.userRepository.save(target);
   }
 
+  async updateOwnImagem(
+    userId: number,
+    imagemUrl: string,
+  ): Promise<UserEntity> {
+    const user = await this.findById(userId);
+    user.imagemUrl = imagemUrl;
+    return await this.userRepository.save(user);
+  }
+
+  async updateOwnPhone(userId: number, phone: string): Promise<UserEntity> {
+    const user = await this.findById(userId);
+
+    user.phone = phone;
+
+    return await this.userRepository.save(user);
+  }
+
   // Excluir usuário
   async deleteUser(id: number): Promise<void> {
     const user = await this.findById(id);
