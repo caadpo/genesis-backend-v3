@@ -40,4 +40,8 @@ export class CreateEscalaDto {
   @IsOptional()
   @IsString()
   anotacoes?: string;
+
+  @IsInt()
+  @IsOptional()
+  viaturaId?: number | null;
 }

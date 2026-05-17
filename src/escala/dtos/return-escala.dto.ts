@@ -1,5 +1,17 @@
 import { EscalaEntity } from '../entities/escala.entity';
 
+export class ReturnViaturaResumoDto {
+  id: number;
+  patrimonio: string;
+  statusVtr: string;
+
+  constructor(v: { id: number; patrimonio: string; statusVtr: string }) {
+    this.id = v.id;
+    this.patrimonio = v.patrimonio;
+    this.statusVtr = v.statusVtr;
+  }
+}
+
 export class ReturnEscalaDto {
   id: number;
   sistema: string;
@@ -20,13 +32,16 @@ export class ReturnEscalaDto {
   localApresentacao: string;
   funcao: string;
   situacao: string;
-  anotacoes: string;
+  anotacoes?: string;
   createdAt: Date;
   updatedAt: Date;
-
-  // ✅ Mantém referência ao usuário e operação para navegação no frontend
-  usuarioId: number;
-  operacaoId: number;
+  usuarioId?: number;
+  operacaoId?: number;
+  viaturaId?: number | null;
+  viatura?: ReturnViaturaResumoDto | null;
+  nomeOperacao?: string;
+  nomeEvento?: string;
+  nomeOme?: string;
 
   constructor(e: EscalaEntity) {
     this.id = e.id;
@@ -53,5 +68,11 @@ export class ReturnEscalaDto {
     this.updatedAt = e.updatedAt;
     this.usuarioId = e.usuario?.id;
     this.operacaoId = e.operacao?.id;
+    this.viaturaId = e.viaturaId ?? null;
+    this.nomeOperacao = e.operacao?.nome_operacao;
+    this.nomeEvento = e.operacao?.evento?.nome_evento;
+    this.nomeOme = e.operacao?.evento?.ome?.nomeOme;
+    // ✅ popula só se a relation vier carregada
+    this.viatura = e.viatura ? new ReturnViaturaResumoDto(e.viatura) : null;
   }
 }

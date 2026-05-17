@@ -15,6 +15,7 @@ import { UserEntity } from 'src/user/entities/user.entity';
 import { Operacao } from 'src/operacao/entities/operacao.entity';
 import { UserType } from 'src/user/enum/user-type.enum';
 import { DadosSgpEntity } from 'src/dadossgp/entities/dadossgp.entity';
+import { ViaturaEntity } from 'src/viatura/entities/viatura.entity';
 
 @Injectable()
 export class EscalaService {
@@ -30,7 +31,38 @@ export class EscalaService {
 
     @InjectRepository(DadosSgpEntity)
     private readonly dadosSgpRepo: Repository<DadosSgpEntity>,
+
+    @InjectRepository(ViaturaEntity)
+    private readonly viaturaRepo: Repository<ViaturaEntity>,
   ) {}
+
+  // ─── Funções que permitem viatura ───────────────────────────────────────────
+  private readonly FUNCOES_COM_VIATURA = ['CMT', 'MOT', 'FISCAL', 'PAT'];
+
+  // ─── Verificação de viatura ──────────────────────────────────────────────────
+  private async verificarViatura(
+    viaturaId: number | null | undefined,
+    funcao: string,
+    omeId: number,
+  ): Promise<void> {
+    if (!viaturaId) return; // viatura é opcional — sem id, sem verificação
+
+    if (!this.FUNCOES_COM_VIATURA.includes(funcao)) {
+      throw new BadRequestException(
+        `A função "${funcao}" não permite atribuição de viatura`,
+      );
+    }
+
+    const viatura = await this.viaturaRepo.findOne({
+      where: { id: viaturaId },
+    });
+
+    if (!viatura) throw new NotFoundException('Viatura não encontrada');
+
+    if (viatura.omeId !== omeId) {
+      throw new ForbiddenException('Você só pode atribuir viaturas da sua OME');
+    }
+  }
 
   // ─── Método para buscar dados combinados: ───────────────────────────────────────
 
@@ -187,17 +219,36 @@ export class EscalaService {
     }
   }
 
+  // ─── FIND MINHAS ESCALAS (usuário logado) ────────────────────────────────────
+  async findMinhasEscalas(usuarioLogado: {
+    id: number;
+    mat: string;
+  }): Promise<ReturnEscalaDto[]> {
+    const escalas = await this.repo
+      .createQueryBuilder('e')
+      .leftJoinAndSelect('e.viatura', 'viatura')
+      .leftJoinAndSelect('e.operacao', 'operacao')
+      .leftJoinAndSelect('operacao.evento', 'evento')
+      .leftJoinAndSelect('evento.ome', 'ome') // ✅ garante nomeOme
+      .where('e.mat = :mat', { mat: usuarioLogado.mat })
+      .orderBy('e.data_inicio', 'ASC')
+      .addOrderBy('e.hora_inicio', 'ASC')
+      .getMany();
+
+    return escalas.map((e) => new ReturnEscalaDto(e));
+  }
+
   // ─── CREATE ─────────────────────────────────────────────────────────────────
   async create(
     dto: CreateEscalaDto,
     usuarioLogado: { id: number; typeUser: number; omeId: number },
   ): Promise<ReturnEscalaDto> {
-    // ✅ removida a chamada duplicada de verificarPermissaoOme que estava aqui
-
     const [{ usuario, sgp }] = await Promise.all([
       this.buscarDadosParaEscala(dto.usuarioId),
       this.verificarPermissaoOme(dto.operacaoId, usuarioLogado),
       this.verificarStatusEvento(dto.operacaoId),
+      // ✅ valida viatura junto com as outras verificações iniciais
+      this.verificarViatura(dto.viaturaId, dto.funcao, usuarioLogado.omeId),
     ]);
 
     const tipoEscala = sgp?.tipoSgp ?? 'P';
@@ -231,13 +282,14 @@ export class EscalaService {
       funcao: dto.funcao,
       situacao: dto.situacao ?? 'REGULAR',
       anotacoes: dto.anotacoes,
+      // ✅ undefined é ignorado pelo TypeORM — sem problema
+      viaturaId: dto.viaturaId ?? undefined,
     });
 
     try {
       const saved = await this.repo.save(escala);
-      return this.findOne(saved.id); // ✅ dentro do try, onde saved existe
+      return this.findOne(saved.id);
     } catch (error: unknown) {
-      // ✅ cast correto para acessar driverError sem erro de TypeScript
       const dbError = error as { driverError?: { code?: string } };
       if (dbError?.driverError?.code === '23505') {
         throw new BadRequestException(
@@ -262,16 +314,19 @@ export class EscalaService {
 
     const operacaoId = dto.operacaoId ?? escala.operacao.id;
 
-    // ✅ índice [0]=permissão(void), [1]=status(void), [2]=dadosNovos
+    // ✅ funcao final = a que vier no dto ou a que já estava na escala
+    const funcaoFinal = dto.funcao ?? escala.funcao;
+
     const [, , dadosNovos] = await Promise.all([
       this.verificarPermissaoOme(operacaoId, usuarioLogado),
       this.verificarStatusEvento(operacaoId),
       dto.usuarioId
         ? this.buscarDadosParaEscala(dto.usuarioId)
         : Promise.resolve(null),
+      // ✅ valida viatura no update também
+      this.verificarViatura(dto.viaturaId, funcaoFinal, usuarioLogado.omeId),
     ]);
 
-    // ✅ usa dadosNovos do Promise.all — sem segunda chamada a buscarDadosParaEscala
     if (dadosNovos) {
       const { usuario, sgp } = dadosNovos;
       escala.mat = usuario.mat;
@@ -293,7 +348,6 @@ export class EscalaService {
     const novaHoraFim = dto.horaFim ?? escala.horaFim;
     const novaCota = this.calcularCota(novaHoraInicio, novaHoraFim);
 
-    // ✅ conflito e teto em paralelo
     await Promise.all([
       this.verificarConflito(escala.mat, novaData, novaSistema, id),
       this.verificarTeto(operacaoId, escala.tipo_escala, novaCota, id),
@@ -312,6 +366,8 @@ export class EscalaService {
       ...(dto.anotacoes !== undefined && { anotacoes: dto.anotacoes }),
       ...(dto.operacaoId && { operacao: { id: dto.operacaoId } }),
       ...(dto.sistema && { sistema: dto.sistema }),
+      // ✅ viaturaId: atualiza se veio no dto; null para remover; undefined para manter
+      ...(dto.viaturaId !== undefined && { viaturaId: dto.viaturaId ?? null }),
     });
 
     await this.repo.save(escala);
@@ -320,9 +376,9 @@ export class EscalaService {
 
   // ─── FIND BY OPERACAO ────────────────────────────────────────────────────────
   async findByOperacao(operacaoId: number): Promise<ReturnEscalaDto[]> {
-    // ✅ Sem joins desnecessários — todos os dados já estão na própria tabela
     const escalas = await this.repo.find({
       where: { operacao: { id: operacaoId } },
+      relations: { viatura: true }, // ✅ carrega os dados da viatura
       order: { dataInicio: 'ASC', horaInicio: 'ASC' },
     });
 
@@ -331,7 +387,10 @@ export class EscalaService {
 
   // ─── FIND ONE ────────────────────────────────────────────────────────────────
   async findOne(id: number): Promise<ReturnEscalaDto> {
-    const escala = await this.repo.findOne({ where: { id } });
+    const escala = await this.repo.findOne({
+      where: { id },
+      relations: { viatura: true }, // ✅ carrega os dados da viatura
+    });
     if (!escala) throw new NotFoundException('Escala não encontrada');
     return new ReturnEscalaDto(escala);
   }

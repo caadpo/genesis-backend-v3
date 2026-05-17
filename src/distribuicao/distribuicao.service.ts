@@ -8,9 +8,12 @@ import { Teto } from 'src/tetos/entities/teto.entity';
 import { CreateDistribuicaoDto } from './dtos/create-distribuicao.dto';
 import { DiretoriaEntity } from 'src/diretoria/entities/diretoria.entity';
 import { ReturnDistribuicaoResumoDto } from './dtos/return-distribuicao.dto';
+import { ReturnDistribuicaoComTotalCotasDto } from './dtos/return-distribuicao-com-total-cotas.dto';
 import { BadRequestException } from '@nestjs/common';
 import { UserType } from 'src/user/enum/user-type.enum';
 import { UserEntity } from 'src/user/entities/user.entity';
+import { EscalaEntity } from 'src/escala/entities/escala.entity';
+import { Evento } from 'src/evento/entities/evento.entity';
 
 @Injectable()
 export class DistribuicaoService {
@@ -26,6 +29,12 @@ export class DistribuicaoService {
 
     @InjectRepository(DiretoriaEntity)
     private readonly diretoriaRepo: Repository<DiretoriaEntity>,
+
+    @InjectRepository(EscalaEntity)
+    private readonly escalaRepo: Repository<EscalaEntity>,
+
+    @InjectRepository(Evento)
+    private readonly eventoRepo: Repository<Evento>,
   ) {}
 
   private async getUserCompleto(userId: number): Promise<UserEntity> {
@@ -148,10 +157,41 @@ export class DistribuicaoService {
     });
   }
 
+  private async getTotalCotasPorTipoDistribuicao(distId: number) {
+    const rows = await this.escalaRepo
+      .createQueryBuilder('e')
+      .select('e.tipo_escala', 'tipo_escala')
+      .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'totalCotas')
+      .innerJoin('e.operacao', 'op')
+      .innerJoin('op.evento', 'ev')
+      .where('ev.distribuicao_id = :distId', { distId })
+      .groupBy('e.tipo_escala')
+      .getRawMany();
+
+    return rows.map((r) => ({
+      tipo_escala: r.tipo_escala,
+      totalCotas: Number(r.totalCotas),
+    }));
+  }
+
+  private async getSomaEventosDistribuicao(distId: number) {
+    const result = await this.eventoRepo
+      .createQueryBuilder('e')
+      .select('COALESCE(SUM(e.qtd_of_evento), 0)', 'soma_of')
+      .addSelect('COALESCE(SUM(e.qtd_prc_evento), 0)', 'soma_prc')
+      .where('e.distribuicao_id = :distId', { distId })
+      .getRawOne();
+
+    return {
+      soma_of: Number(result.soma_of),
+      soma_prc: Number(result.soma_prc),
+    };
+  }
+
   async findAllComRegra(
     tetoId: number | undefined,
     user: UserEntity,
-  ): Promise<Distribuicao[]> {
+  ): Promise<ReturnDistribuicaoComTotalCotasDto[]> {
     const userCompleto = await this.getUserCompleto(user.id);
 
     const qb = this.distribuicaoRepo
@@ -177,7 +217,23 @@ export class DistribuicaoService {
       });
     }
 
-    return qb.getMany();
+    const distribs = await qb.getMany();
+
+    return Promise.all(
+      distribs.map(async (dist) => {
+        const cotasPorTipo = await this.getTotalCotasPorTipoDistribuicao(
+          dist.id,
+        );
+        const eventosSoma = await this.getSomaEventosDistribuicao(dist.id);
+
+        return new ReturnDistribuicaoComTotalCotasDto(
+          dist,
+          cotasPorTipo,
+          eventosSoma.soma_of,
+          eventosSoma.soma_prc,
+        );
+      }),
+    );
   }
 
   async findByTeto(tetoId: number): Promise<Distribuicao[]> {
@@ -189,14 +245,23 @@ export class DistribuicaoService {
     });
   }
 
-  async findOne(id: number): Promise<Distribuicao> {
+  async findOne(id: number): Promise<ReturnDistribuicaoComTotalCotasDto> {
     const dist = await this.distribuicaoRepo.findOne({
       where: { id },
       relations: ['teto', 'diretoria'],
     });
 
     if (!dist) throw new NotFoundException('Distribuição não encontrada');
-    return dist;
+
+    const cotasPorTipo = await this.getTotalCotasPorTipoDistribuicao(dist.id);
+    const eventosSoma = await this.getSomaEventosDistribuicao(dist.id);
+
+    return new ReturnDistribuicaoComTotalCotasDto(
+      dist,
+      cotasPorTipo,
+      eventosSoma.soma_of,
+      eventosSoma.soma_prc,
+    );
   }
 
   async update(id: number, dto: Partial<CreateDistribuicaoDto>) {

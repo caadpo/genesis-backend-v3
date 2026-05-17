@@ -17,6 +17,7 @@ import { UpdateOperacaoDto } from './dtos/update-operacao.dto';
 import { ReturnOperacaoResumoDto } from './dtos/return-operacao-resumo.dto';
 import { UserType } from 'src/user/enum/user-type.enum'; // ✅
 import { EscalaEntity } from 'src/escala/entities/escala.entity';
+import { ReturnOperacaoComTotalCotasDto } from './dtos/return-operacao-com-total-cotas.dto';
 
 @Injectable()
 export class OperacaoService {
@@ -187,7 +188,23 @@ export class OperacaoService {
     return this.operacaoRepo.save(operacao);
   }
 
-  async findAll(eventoId?: number) {
+  // ─── Método auxiliar para buscar totalCotas por tipo_escala ────────────────────
+  private async getTotalCotasPorTipo(operacaoId: number) {
+    const result = await this.escalaRepo
+      .createQueryBuilder('e')
+      .select('e.tipo_escala', 'tipo_escala')
+      .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'totalCotas')
+      .where('e.operacao_id = :operacaoId', { operacaoId })
+      .groupBy('e.tipo_escala')
+      .getRawMany();
+
+    return result.map((r) => ({
+      tipo_escala: r.tipo_escala,
+      totalCotas: Number(r.totalCotas),
+    }));
+  }
+
+  async findAll(eventoId?: number): Promise<ReturnOperacaoComTotalCotasDto[]> {
     const qb = this.operacaoRepo
       .createQueryBuilder('o')
       .leftJoinAndSelect('o.evento', 'e')
@@ -197,7 +214,17 @@ export class OperacaoService {
       qb.where('e.id = :id', { id: eventoId });
     }
 
-    return qb.getMany();
+    const operacoes = await qb.getMany();
+
+    // Enriquecer cada operação com totalCotas por tipo_escala
+    const operacoesComCotas = await Promise.all(
+      operacoes.map(async (op) => {
+        const cotasPorTipo = await this.getTotalCotasPorTipo(op.id);
+        return new ReturnOperacaoComTotalCotasDto(op, cotasPorTipo);
+      }),
+    );
+
+    return operacoesComCotas;
   }
 
   async findOne(id: number): Promise<Operacao> {

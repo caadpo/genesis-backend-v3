@@ -20,12 +20,11 @@ export class CreateEscalaTable1775481824600 implements MigrationInterface {
             isNullable: false,
           },
 
-          // ─── Referências ──────────────────────────────────────────────────
           { name: 'mat', type: 'varchar', isNullable: false },
           { name: 'operacao_id', type: 'integer', isNullable: false },
           { name: 'usuario_id', type: 'integer', isNullable: false },
+          { name: 'viatura_id', type: 'integer', isNullable: true }, // ✅ nullable
 
-          // ─── Snapshot imutável do usuário no momento da criação ───────────
           { name: 'cpf_escala', type: 'varchar', isNullable: false },
           { name: 'pg_escala', type: 'varchar', isNullable: false },
           { name: 'tipo_escala', type: 'varchar', isNullable: false },
@@ -36,7 +35,6 @@ export class CreateEscalaTable1775481824600 implements MigrationInterface {
           { name: 'agencia_escala', type: 'varchar', isNullable: false },
           { name: 'conta_escala', type: 'varchar', isNullable: false },
 
-          // ─── Dados da escala ──────────────────────────────────────────────
           { name: 'data_inicio', type: 'date', isNullable: false },
           { name: 'hora_inicio', type: 'time', isNullable: false },
           { name: 'hora_fim', type: 'time', isNullable: false },
@@ -69,13 +67,11 @@ export class CreateEscalaTable1775481824600 implements MigrationInterface {
       }),
     );
 
-    // ✅ Unicidade: mat + data + sistema
     await queryRunner.query(
       `CREATE UNIQUE INDEX "IDX_escala_mat_data_sistema"
        ON "escala" ("mat", "data_inicio", "sistema")`,
     );
 
-    // ✅ Índices de busca performática
     await queryRunner.query(
       `CREATE INDEX "IDX_escala_operacao_id" ON "escala" ("operacao_id")`,
     );
@@ -85,7 +81,6 @@ export class CreateEscalaTable1775481824600 implements MigrationInterface {
     await queryRunner.query(
       `CREATE INDEX "IDX_escala_data_inicio" ON "escala" ("data_inicio")`,
     );
-    // ✅ Índice para queries por tipo (verificarTeto)
     await queryRunner.query(
       `CREATE INDEX "IDX_escala_tipo_escala" ON "escala" ("tipo_escala")`,
     );
@@ -107,6 +102,16 @@ export class CreateEscalaTable1775481824600 implements MigrationInterface {
         referencedTableName: 'user',
         referencedColumnNames: ['id'],
         onDelete: 'CASCADE',
+      }),
+    );
+
+    await queryRunner.createForeignKey(
+      'escala',
+      new TableForeignKey({
+        columnNames: ['viatura_id'], // ✅ typo corrigido
+        referencedTableName: 'viatura',
+        referencedColumnNames: ['id'],
+        onDelete: 'SET NULL', // ✅ não apaga escala se viatura sumir
       }),
     );
   }

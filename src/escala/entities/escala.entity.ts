@@ -11,6 +11,7 @@ import {
 import { Operacao } from 'src/operacao/entities/operacao.entity';
 import { UserEntity } from 'src/user/entities/user.entity';
 import { Sistema } from 'src/tetos/entities/teto.entity';
+import { ViaturaEntity } from 'src/viatura/entities/viatura.entity';
 
 // ✅ Unicidade: mesma matrícula, mesma data, mesmo sistema → BLOQUEADO
 @Index(['mat', 'dataInicio', 'sistema'], { unique: true })
@@ -87,6 +88,13 @@ export class EscalaEntity {
 
   @Column({ type: 'text', name: 'anotacoes', nullable: true })
   anotacoes!: string;
+
+  @Column({ name: 'viatura_id', nullable: true })
+  viaturaId?: number;
+
+  @ManyToOne(() => ViaturaEntity, { nullable: true, eager: false })
+  @JoinColumn({ name: 'viatura_id' })
+  viatura?: ViaturaEntity;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;

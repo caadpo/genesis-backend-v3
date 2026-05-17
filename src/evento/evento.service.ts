@@ -23,6 +23,7 @@ import {
 } from './dtos/return-evento-com-escalas.dto';
 import { DadosSgpEntity } from 'src/dadossgp/entities/dadossgp.entity';
 import { Operacao } from 'src/operacao/entities/operacao.entity';
+import { ReturnEventoComTotalCotasDto } from './dtos/return-evento-com-total-cotas.dto';
 
 @Injectable()
 export class EventoService {
@@ -453,7 +454,27 @@ export class EventoService {
     return new ReturnEventoDto(saved);
   }
 
-  async findAll(distribuicaoId?: number): Promise<ReturnEventoDto[]> {
+  // ─── Método auxiliar para buscar totalCotas por tipo_escala ────────────────────
+  private async getTotalCotasPorTipo(eventoId: number) {
+    const result = await this.escalaRepo
+      .createQueryBuilder('e')
+      .select('e.tipo_escala', 'tipo_escala')
+      .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'totalCotas')
+      .innerJoin('e.operacao', 'op')
+      .innerJoin('op.evento', 'ev')
+      .where('ev.id = :eventoId', { eventoId })
+      .groupBy('e.tipo_escala')
+      .getRawMany();
+
+    return result.map((r) => ({
+      tipo_escala: r.tipo_escala,
+      totalCotas: Number(r.totalCotas),
+    }));
+  }
+
+  async findAll(
+    distribuicaoId?: number,
+  ): Promise<ReturnEventoComTotalCotasDto[]> {
     const qb = this.eventoRepo
       .createQueryBuilder('e')
       .leftJoinAndSelect('e.distribuicao', 'd')
@@ -470,7 +491,16 @@ export class EventoService {
     }
 
     const eventos = await qb.getMany();
-    return eventos.map((e) => new ReturnEventoDto(e));
+
+    // Enriquecer cada evento com totalCotas por tipo_escala
+    const eventosComCotas = await Promise.all(
+      eventos.map(async (e) => {
+        const cotasPorTipo = await this.getTotalCotasPorTipo(e.id);
+        return new ReturnEventoComTotalCotasDto(e, cotasPorTipo);
+      }),
+    );
+
+    return eventosComCotas;
   }
 
   async findOne(id: number): Promise<ReturnEventoDto> {

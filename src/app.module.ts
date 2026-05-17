@@ -18,6 +18,7 @@ import { ConfigModule } from '@nestjs/config';
 import { EscalaModule } from './escala/escala.module';
 import { PagamentoModule } from './pagamento/pagamento.module';
 import { RepasseModule } from './repasse/repasse.module';
+import { ViaturaModule } from './viatura/viatura.module';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { RepasseModule } from './repasse/repasse.module';
     EscalaModule,
     PagamentoModule,
     RepasseModule,
+    ViaturaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

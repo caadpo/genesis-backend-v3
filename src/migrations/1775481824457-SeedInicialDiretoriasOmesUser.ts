@@ -31,7 +31,7 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
      */
     await queryRunner.query(`
       INSERT INTO ome (nomeome, diretoriaid)
-      SELECT 'CPA_DPO',  id FROM diretoria WHERE nomediretoria = 'DPO'
+      SELECT 'DPO SEDE',  id FROM diretoria WHERE nomediretoria = 'DPO'
       UNION ALL
       SELECT '1º BPM',   id FROM diretoria WHERE nomediretoria = 'DIM'
       UNION ALL
@@ -53,7 +53,7 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
       INSERT INTO "user" (mat, password, type_user, phone, imagem_url, omeid)
       SELECT $1, $2, $3, $4, $5, id
       FROM ome
-      WHERE nomeome = 'CPA_DPO';
+      WHERE nomeome = 'DPO SEDE';
       `,
       ['1157590', hashedPassword, 10, '(81)98685-4814', '/1157590.png'],
     );
@@ -68,7 +68,7 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
          cpfsgp, nunfuncsgp, nunvincsgp, localapresentacaosgp, situacaosgp)
       VALUES
         ('1157590', 'CB', 'FRANCISCO', 'FRANCISCO SILVA SANTOS',
-         'CPA_DPO', 'P', '08286667417', '3392503', '1',
+         'DPO SEDE', 'P', '08286667417', '3392503', '1',
          'SEDE DA OME', 'REGULAR'),
 
         ('1000001', 'CAP', 'OLIVEIRA', 'CARLOS OLIVEIRA MELO',
