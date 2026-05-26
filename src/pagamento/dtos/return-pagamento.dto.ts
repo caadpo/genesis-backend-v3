@@ -4,8 +4,6 @@ export class ReturnPagamentoDto {
   id: number;
   eventoId: number;
   usuarioId: number;
-  mat: number;
-  pg_pagamento: string;
   nome_pagamento: string;
   nomeome_pagamento: string;
   cpf_pagamento: string;
@@ -19,13 +17,13 @@ export class ReturnPagamentoDto {
   valor_cota: number;
   valor_total: number;
   createdAt: Date;
+  nome_evento!: string;
+  nome_ome!: string;
 
   constructor(p: PagamentoEntity) {
     this.id = p.id;
     this.eventoId = p.eventoId;
     this.usuarioId = p.usuarioId;
-    this.mat = p.mat;
-    this.pg_pagamento = p.pg_pagamento;
     this.nome_pagamento = p.nome_pagamento;
     this.nomeome_pagamento = p.nomeome_pagamento;
     this.cpf_pagamento = p.cpf_pagamento;
@@ -39,5 +37,7 @@ export class ReturnPagamentoDto {
     this.valor_cota = p.valor_cota;
     this.valor_total = p.valor_total;
     this.createdAt = p.createdAt;
+    this.nome_evento = p.evento?.nome_evento ?? '';
+    this.nome_ome = p.evento?.ome?.nomeOme ?? '';
   }
 }

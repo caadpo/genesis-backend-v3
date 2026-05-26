@@ -1,4 +1,4 @@
-import { IsInt, IsNumber, IsString } from 'class-validator';
+import { IsInt, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateEventoDto {
   @IsInt()
@@ -15,4 +15,8 @@ export class CreateEventoDto {
 
   @IsInt()
   qtd_prc_evento!: number;
+
+  @IsString()
+  @IsOptional()
+  status_evento?: string;
 }

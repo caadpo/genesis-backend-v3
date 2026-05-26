@@ -64,7 +64,7 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
      */
     await queryRunner.query(`
       INSERT INTO dadossgp
-        (matsgp, pgsgp, ngsgp, nomecompletosgp, omesgp, tiposgp,
+        (matsgp, pgsgp, nomeguerrasgp, nomecompletosgp, nomeomesgp, tiposgp,
          cpfsgp, nunfuncsgp, nunvincsgp, localapresentacaosgp, situacaosgp)
       VALUES
         ('1157590', 'CB', 'FRANCISCO', 'FRANCISCO SILVA SANTOS',

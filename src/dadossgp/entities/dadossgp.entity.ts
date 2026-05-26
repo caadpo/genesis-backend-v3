@@ -5,17 +5,20 @@ export class DadosSgpEntity {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column({ name: 'matsgp', type: 'varchar' })
-  matSgp!: string;
-
   @Column({ name: 'pgsgp', type: 'varchar' })
   pgSgp!: string;
 
+  @Column({ name: 'matsgp', type: 'varchar' })
+  matSgp!: string;
+
+  @Column({ name: 'nomeguerrasgp', type: 'varchar' })
+  nomeGuerraSgp!: string;
+
+  @Column({ name: 'nomeomesgp', type: 'varchar' })
+  nomeOmeSgp!: string;
+
   @Column({ name: 'tiposgp', type: 'varchar' })
   tipoSgp!: string;
-
-  @Column({ name: 'ngsgp', type: 'varchar' })
-  nomeGuerraSgp!: string;
 
   @Column({ name: 'nomecompletosgp', type: 'varchar' })
   nomeCompletoSgp!: string;

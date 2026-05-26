@@ -33,11 +33,6 @@ export class PagamentoEntity {
   usuario!: UserEntity;
 
   // ─── Snapshot do usuário no momento do pagamento ──────────────────────────
-  @Column({ name: 'mat' })
-  mat!: number;
-
-  @Column({ name: 'pg_pagamento', type: 'varchar' })
-  pg_pagamento!: string;
 
   @Column({ name: 'nome_pagamento', type: 'varchar' })
   nome_pagamento!: string;

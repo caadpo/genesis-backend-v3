@@ -12,6 +12,7 @@ export class ReturnEventoDto {
   homologado_em?: Date; // ✅ adicionar
   ome: ReturnOmeDto;
   user: ReturnUserPublicDto;
+  status_teto?: string;
 
   constructor(evento: any) {
     this.id = evento.id;
@@ -24,5 +25,6 @@ export class ReturnEventoDto {
     this.homologado_em = evento.homologado_em ?? undefined; // ✅ adicionar
     this.ome = new ReturnOmeDto(evento.ome);
     this.user = new ReturnUserPublicDto(evento.user);
+    this.status_teto = evento.distribuicao?.teto?.status ?? undefined;
   }
 }

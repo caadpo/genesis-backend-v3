@@ -56,9 +56,8 @@ export class UserService {
         'u.mat         AS mat',
         'u.phone       AS phone',
         'u.type_user   AS "typeUser"',
-        // ✅ dados pessoais agora vêm do SGP
         'dsgp.pgsgp         AS pg',
-        'dsgp.ngsgp         AS "nomeGuerra"',
+        'dsgp.nomeguerrasgp AS "nomeGuerra"',
         'dsgp.tiposgp       AS tipo',
         'dsgp.cpfsgp        AS cpf',
         'dsgp.nunfuncsgp    AS nunfunc',
@@ -79,7 +78,7 @@ export class UserService {
     if (isNumber) {
       qb.where('u.mat = :mat', { mat: q });
     } else {
-      qb.where('dsgp.ngsgp ILIKE :nome', { nome: `${q}%` });
+      qb.where('dsgp.nomeguerrasgp ILIKE :nome', { nome: `${q}%` });
     }
 
     const raw = await qb.getRawOne<any>();

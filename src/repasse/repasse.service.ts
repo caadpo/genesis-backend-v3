@@ -49,13 +49,13 @@ export class RepasseService {
     // ✅ Uma query traz a escala + operacao + evento (necessário para verificar status)
     const escala = await this.escalaRepo.findOne({
       where: { id: dto.escalaId },
-      relations: { operacao: { evento: true } },
+      relations: { operacao: { evento: true }, usuario: true },
     });
 
     if (!escala) throw new NotFoundException('Escala não encontrada');
 
     // ─── Pertence ao usuário logado? ──────────────────────────────────────────
-    if (escala.mat !== usuarioLogado.mat) {
+    if (escala.usuario.mat !== usuarioLogado.mat) {
       throw new ForbiddenException(
         'Você só pode repassar escalas que pertencem a você',
       );
@@ -94,7 +94,7 @@ export class RepasseService {
       dataInicioRepasse: escala.dataInicio,
       horaInicioRepasse: escala.horaInicio,
       horaFimRepasse: escala.horaFim,
-      matOfertante: escala.mat,
+      matOfertante: escala.usuario.mat,
       motivo: dto.motivo ?? null,
     });
 
@@ -137,6 +137,7 @@ export class RepasseService {
       this.dadosSgpRepo
         .createQueryBuilder('sgp')
         .select([
+          'sgp.id',
           'sgp.pgSgp',
           'sgp.nomeGuerraSgp',
           'sgp.tipoSgp',
@@ -191,13 +192,12 @@ export class RepasseService {
 
     // ─── Receptor já está escalado no mesmo dia + mesmo sistema? ─────────────
     // ✅ Usa o índice IDX_escala_mat_data_sistema (unique) para resolver em O(1)
-    const conflito = await this.escalaRepo.exists({
-      where: {
-        mat: usuarioLogado.mat,
-        dataInicio: repasse.dataInicioRepasse,
-        sistema: repasse.sistemaRepasse as any,
-      },
-    });
+    const conflito = await this.escalaRepo
+      .createQueryBuilder('e')
+      .where('e.mat_escala = :mat', { mat: usuarioLogado.mat })
+      .andWhere('e.data_inicio = :data', { data: repasse.dataInicioRepasse })
+      .andWhere('e.sistema = :sistema', { sistema: repasse.sistemaRepasse })
+      .getExists();
     if (conflito) {
       throw new BadRequestException(
         `Você já está escalado no dia ${repasse.dataInicioRepasse} para o sistema ${repasse.sistemaRepasse}`,
@@ -214,17 +214,10 @@ export class RepasseService {
 
       // 2. Atualiza a escala com os dados do receptor
       await manager.update(EscalaEntity, repasse.escala.id, {
-        mat: usuarioLogado.mat,
         usuario: { id: usuarioLogado.id },
-        cpf_escala: sgpReceptor?.cpfSgp ?? '',
-        pg_escala: sgpReceptor?.pgSgp ?? '',
-        tipo_escala: tipoReceptor,
-        nome_escala: sgpReceptor?.nomeGuerraSgp ?? '',
-        phone_escala: receptor.phone ?? '',
         nomeome_escala: receptor.ome?.nomeOme ?? '',
-        banco_escala: receptor.conta?.banco ?? '',
-        agencia_escala: receptor.conta?.agencia ?? '',
-        conta_escala: receptor.conta?.conta ?? '',
+        //dadosSgp: sgpReceptor ? { id: sgpReceptor.id } : () => 'NULL',
+        conta: receptor.conta ? { id: receptor.conta.id } : () => 'NULL',
       });
     });
 
@@ -300,11 +293,11 @@ export class RepasseService {
       .andWhere('evento.ome_id = :omeId', { omeId: usuarioLogado.omeId })
       .andWhere(
         `NOT EXISTS (
-        SELECT 1 FROM escala e
-        WHERE e.mat = :mat
-          AND e.data_inicio = r.data_inicio_repasse
-          AND e.sistema = r.sistema_repasse::escala_sistema_enum
-      )`,
+    SELECT 1 FROM escala e
+    WHERE e.mat_escala = :mat
+      AND e.data_inicio = r.data_inicio_repasse
+      AND e.sistema = r.sistema_repasse::escala_sistema_enum
+  )`,
         { mat: usuarioLogado.mat },
       )
       .orderBy('r.created_at', 'DESC') // Changed to most recent first

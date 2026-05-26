@@ -7,9 +7,11 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
 import { Teto } from 'src/tetos/entities/teto.entity';
 import { DiretoriaEntity } from 'src/diretoria/entities/diretoria.entity';
+import { Evento } from 'src/evento/entities/evento.entity';
 
 @Entity('distribuicao')
 export class Distribuicao {
@@ -38,4 +40,7 @@ export class Distribuicao {
 
   @UpdateDateColumn({ type: 'timestamp' })
   updated_at!: Date;
+
+  @OneToMany(() => Evento, (evento) => evento.distribuicao)
+  eventos!: Evento[];
 }

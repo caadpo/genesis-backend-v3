@@ -1,8 +1,8 @@
 import { Distribuicao } from '../entities/distribuicao.entity';
 
 export class TotalCotasPorTipoDto {
-  tipo_escala: string;
-  totalCotas: number;
+  tipo_escala!: string;
+  totalCotas!: number;
 }
 
 export class ReturnDistribuicaoComTotalCotasDto {
@@ -35,10 +35,13 @@ export class ReturnDistribuicaoComTotalCotasDto {
     this.created_at = distribuicao.created_at;
     this.updated_at = distribuicao.updated_at;
     this.cotasPorTipo = cotasPorTipo;
+
+    // ✅ tipo vem de dadosSgp.tipoSgp — o campo tipo_escala é 'tipoSgp' retornado como 'tipo_escala'
     this.totalCotasOficiais =
       cotasPorTipo.find((c) => c.tipo_escala === 'O')?.totalCotas ?? 0;
     this.totalCotasPracas =
       cotasPorTipo.find((c) => c.tipo_escala === 'P')?.totalCotas ?? 0;
+
     this.saldo_of = distribuicao.qtd_dist_of - somaEventosOf;
     this.saldo_prc = distribuicao.qtd_dist_prc - somaEventosPrc;
   }

@@ -14,8 +14,6 @@ export class CreatePagamentoTable1775481824610 implements MigrationInterface {
           { name: 'id', type: 'serial', isPrimary: true },
           { name: 'evento_id', type: 'integer', isNullable: false },
           { name: 'usuario_id', type: 'integer', isNullable: false },
-          { name: 'mat', type: 'integer', isNullable: false },
-          { name: 'pg_pagamento', type: 'varchar', isNullable: false },
           { name: 'nome_pagamento', type: 'varchar', isNullable: false },
           { name: 'nomeome_pagamento', type: 'varchar', isNullable: false },
           { name: 'cpf_pagamento', type: 'varchar', isNullable: false },

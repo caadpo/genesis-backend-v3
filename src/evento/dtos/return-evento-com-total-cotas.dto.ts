@@ -1,8 +1,8 @@
 import { ReturnEventoDto } from './return-evento.dto';
 
 export class TotalCotasPorTipo {
-  tipo_escala: string;
-  totalCotas: number;
+  tipo_escala!: string;
+  totalCotas!: number;
 }
 
 export class ReturnEventoComTotalCotasDto extends ReturnEventoDto {

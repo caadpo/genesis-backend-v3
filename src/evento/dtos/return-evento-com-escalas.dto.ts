@@ -3,6 +3,7 @@ export class UsuarioResumoEscalaDto {
   mat!: string;
   pg!: string;
   nomeGuerra!: string;
+  nomeCompleto!: string;
   nomeOme!: string;
   phone!: string;
   cpf!: string;

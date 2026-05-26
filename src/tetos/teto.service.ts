@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Sistema, Teto } from './entities/teto.entity';
 import { StatusTeto } from './enum/teto-type.enum';
+import { EscalaEntity } from 'src/escala/entities/escala.entity';
+import { ReturnTetoDto } from './dtos/return-teto.dto';
 
 @Injectable()
 export class TetoService {
@@ -19,7 +21,7 @@ export class TetoService {
       sistema: t.sistema,
       nome_verba: t.nome_verba,
       cod_verba: t.cod_verba,
-      valor_total: Number(t.valor_total), // ← aqui estava o bug
+      valor_total: Number(t.valor_total),
       ttctof: t.ttctof,
       ttctprc: t.ttctprc,
       data_inicio: t.data_inicio,
@@ -31,6 +33,86 @@ export class TetoService {
     };
   }
 
+  private mapRawTeto(raw: any): ReturnTetoDto {
+    const base = {
+      id: raw.id,
+      imagemUrl: raw.imagemUrl,
+      sistema: raw.sistema,
+      nome_verba: raw.nome_verba,
+      cod_verba: raw.cod_verba,
+      valor_total: Number(raw.valor_total),
+      ttctof: Number(raw.ttctof),
+      ttctprc: Number(raw.ttctprc),
+      data_inicio: raw.data_inicio,
+      data_fim: raw.data_fim,
+      tipo_periodo: raw.tipo_periodo,
+      status: raw.status,
+      created_at: raw.created_at,
+      updated_at: raw.updated_at,
+    };
+
+    const qtd_dist_of = Number(raw.qtd_dist_of ?? 0);
+    const qtd_dist_prc = Number(raw.qtd_dist_prc ?? 0);
+    const totalCotasOficiais = Number(raw.totalCotasOficiais ?? 0);
+    const totalCotasPracas = Number(raw.totalCotasPracas ?? 0);
+
+    return {
+      ...base,
+      qtd_dist_of,
+      qtd_dist_prc,
+      saldo_of: Number(base.ttctof) - qtd_dist_of,
+      saldo_prc: Number(base.ttctprc) - qtd_dist_prc,
+      totalCotasOficiais,
+      totalCotasPracas,
+    };
+  }
+
+  private buildTetoQuery() {
+    return (
+      this.tetoRepository
+        .createQueryBuilder('t')
+        .select('t.id', 'id')
+        .addSelect('t.imagem_url', 'imagemUrl')
+        .addSelect('t.sistema', 'sistema')
+        .addSelect('t.nome_verba', 'nome_verba')
+        .addSelect('t.cod_verba', 'cod_verba')
+        .addSelect('t.valor_total', 'valor_total')
+        .addSelect('t.ttctof', 'ttctof')
+        .addSelect('t.ttctprc', 'ttctprc')
+        .addSelect('t.data_inicio', 'data_inicio')
+        .addSelect('t.data_fim', 'data_fim')
+        .addSelect('t.tipo_periodo', 'tipo_periodo')
+        .addSelect('t.status', 'status')
+        .addSelect('t.created_at', 'created_at')
+        .addSelect('t.updated_at', 'updated_at')
+        // ✅ tipo_escala agora é coluna snapshot na própria tabela escala — sem join com dadosSgp
+        .addSelect(
+          (subQuery) =>
+            subQuery
+              .select('COALESCE(SUM(e.cota_escala), 0)')
+              .from(EscalaEntity, 'e')
+              .innerJoin('e.operacao', 'op')
+              .innerJoin('op.evento', 'ev')
+              .innerJoin('ev.distribuicao', 'd')
+              .where('e.tipo_escala = :tipoOf', { tipoOf: 'O' })
+              .andWhere('d.teto_id = t.id'),
+          'totalCotasOficiais',
+        )
+        .addSelect(
+          (subQuery) =>
+            subQuery
+              .select('COALESCE(SUM(e.cota_escala), 0)')
+              .from(EscalaEntity, 'e')
+              .innerJoin('e.operacao', 'op')
+              .innerJoin('op.evento', 'ev')
+              .innerJoin('ev.distribuicao', 'd')
+              .where('e.tipo_escala = :tipoPrc', { tipoPrc: 'P' })
+              .andWhere('d.teto_id = t.id'),
+          'totalCotasPracas',
+        )
+    );
+  }
+
   async create(dados: Partial<Teto>) {
     const teto = this.tetoRepository.create(dados);
     const saved = await this.tetoRepository.save(teto);
@@ -38,46 +120,44 @@ export class TetoService {
   }
 
   // 🔵 PJES → depende de mês/ano e status
-  async findPjesPorMes(mes: number, ano: number) {
+  async findPjesPorMes(mes: number, ano: number): Promise<ReturnTetoDto[]> {
     const inicioMes = new Date(ano, mes - 1, 1);
     const fimMes = new Date(ano, mes, 0);
 
-    const tetos = await this.tetoRepository
-      .createQueryBuilder('t')
+    const tetos = await this.buildTetoQuery()
       .where('t.sistema = :sistema', { sistema: Sistema.PJES })
-      .andWhere('t.status = :status', { status: StatusTeto.ABERTO })
       .andWhere(
         `t.data_inicio <= :fimMes
          AND t.data_fim >= :inicioMes`,
         { inicioMes, fimMes },
       )
       .orderBy('t.nome_verba', 'ASC')
-      .getMany();
+      .getRawMany();
 
-    return tetos.map((t) => this.toJSON(t));
+    return tetos.map((raw) => this.mapRawTeto(raw));
   }
 
   // 🟢 DIÁRIAS → NÃO USA DATA, SÓ STATUS
-  async findDiariasAbertas() {
-    const tetos = await this.tetoRepository.find({
-      where: {
-        sistema: Sistema.DIARIAS,
-        status: StatusTeto.ABERTO,
-      },
-      order: { nome_verba: 'ASC' },
-    });
+  async findDiariasAbertas(): Promise<ReturnTetoDto[]> {
+    const tetos = await this.buildTetoQuery()
+      .where('t.sistema = :sistema', { sistema: Sistema.DIARIAS })
+      .andWhere('t.status = :status', { status: StatusTeto.ABERTO })
+      .orderBy('t.nome_verba', 'ASC')
+      .getRawMany();
 
-    return tetos.map((t) => this.toJSON(t));
+    return tetos.map((raw) => this.mapRawTeto(raw));
   }
 
-  async findOne(id: number) {
-    const teto = await this.tetoRepository.findOneBy({ id });
+  async findOne(id: number): Promise<ReturnTetoDto> {
+    const rawTeto = await this.buildTetoQuery()
+      .where('t.id = :id', { id })
+      .getRawOne();
 
-    if (!teto) {
+    if (!rawTeto) {
       throw new NotFoundException(`Teto com ID ${id} não encontrado`);
     }
 
-    return this.toJSON(teto);
+    return this.mapRawTeto(rawTeto);
   }
 
   async update(id: number, dados: Partial<Teto>) {

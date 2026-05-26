@@ -10,11 +10,12 @@ import {
 } from 'typeorm';
 import { Operacao } from 'src/operacao/entities/operacao.entity';
 import { UserEntity } from 'src/user/entities/user.entity';
+import { ContaEntity } from 'src/conta/entities/conta.entity';
 import { Sistema } from 'src/tetos/entities/teto.entity';
 import { ViaturaEntity } from 'src/viatura/entities/viatura.entity';
 
 // ✅ Unicidade: mesma matrícula, mesma data, mesmo sistema → BLOQUEADO
-@Index(['mat', 'dataInicio', 'sistema'], { unique: true })
+@Index(['mat_escala', 'dataInicio', 'sistema'], { unique: true })
 @Entity('escala')
 export class EscalaEntity {
   @PrimaryGeneratedColumn()
@@ -22,9 +23,6 @@ export class EscalaEntity {
 
   @Column({ type: 'enum', enum: Sistema })
   sistema!: Sistema;
-
-  @Column({ type: 'varchar' })
-  mat!: string;
 
   @ManyToOne(() => Operacao, { nullable: false })
   @JoinColumn({ name: 'operacao_id' })
@@ -34,32 +32,39 @@ export class EscalaEntity {
   @JoinColumn({ name: 'usuario_id' })
   usuario!: UserEntity;
 
-  @Column({ type: 'varchar', name: 'cpf_escala' })
-  cpf_escala!: string;
+  /* Campos vindos da tabel dadosSGP */
 
   @Column({ type: 'varchar', name: 'pg_escala' })
-  pg_escala!: string;
+  pg_escala!: string; //Cb ou Cap
+
+  @Column({ type: 'varchar', name: 'mat_escala' })
+  mat_escala!: string; //1157590
+
+  @Column({ type: 'varchar', name: 'ng_escala' })
+  ng_escala!: string; //Nome de Guerra
 
   @Column({ type: 'varchar', name: 'tipo_escala' })
-  tipo_escala!: string;
+  tipo_escala!: string; //O ou P
 
-  @Column({ type: 'varchar', name: 'nome_escala' })
-  nome_escala!: string;
+  @Column({ type: 'varchar', name: 'cpf_escala' })
+  cpf_escala!: string; //08289997612
+
+  @Column({ type: 'varchar', name: 'nomecompleto_escala' })
+  nomecompleto_escala!: string; //EMERSON FRANCISCO DA SILVA
 
   @Column({ type: 'varchar', name: 'nomeome_escala' })
-  nomeome_escala!: string;
+  nomeome_escala!: string; //OME do usuário na escala
 
-  @Column({ type: 'varchar', name: 'phone_escala' })
-  phone_escala!: string;
+  @Column({ type: 'varchar', name: 'nunfunc_escala' })
+  nunfunc_escala!: string; //Número de Funcionário
 
-  @Column({ type: 'varchar', name: 'banco_escala' })
-  banco_escala!: string;
+  @Column({ type: 'varchar', name: 'nunvinc_escala' })
+  nunvinc_escala!: string; //Número de Vinculo
 
-  @Column({ type: 'varchar', name: 'agencia_escala' })
-  agencia_escala!: string;
-
-  @Column({ type: 'varchar', name: 'conta_escala' })
-  conta_escala!: string;
+  // Conta relacionada
+  @ManyToOne(() => ContaEntity, { nullable: true })
+  @JoinColumn({ name: 'conta_id' })
+  conta?: ContaEntity;
 
   @Column({ type: 'date', name: 'data_inicio' })
   dataInicio!: string;

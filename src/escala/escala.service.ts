@@ -1,6 +1,6 @@
 import {
   BadRequestException,
-  ForbiddenException, // ✅ adicionar
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -14,8 +14,14 @@ import { ReturnEscalaDto } from './dtos/return-escala.dto';
 import { UserEntity } from 'src/user/entities/user.entity';
 import { Operacao } from 'src/operacao/entities/operacao.entity';
 import { UserType } from 'src/user/enum/user-type.enum';
-import { DadosSgpEntity } from 'src/dadossgp/entities/dadossgp.entity';
 import { ViaturaEntity } from 'src/viatura/entities/viatura.entity';
+import { DadosSgpEntity } from 'src/dadossgp/entities/dadossgp.entity';
+import { ReturnEscalaOperacaoDto } from './dtos/return-escala-operacao.dto';
+
+export interface CotasPorTipo {
+  tipo_escala: string;
+  totalCotas: number;
+}
 
 @Injectable()
 export class EscalaService {
@@ -29,23 +35,75 @@ export class EscalaService {
     @InjectRepository(Operacao)
     private readonly operacaoRepo: Repository<Operacao>,
 
-    @InjectRepository(DadosSgpEntity)
-    private readonly dadosSgpRepo: Repository<DadosSgpEntity>,
-
     @InjectRepository(ViaturaEntity)
     private readonly viaturaRepo: Repository<ViaturaEntity>,
+
+    @InjectRepository(DadosSgpEntity)
+    private readonly dadosSgpRepo: Repository<DadosSgpEntity>,
   ) {}
 
-  // ─── Funções que permitem viatura ───────────────────────────────────────────
   private readonly FUNCOES_COM_VIATURA = ['CMT', 'MOT', 'FISCAL', 'PAT'];
 
-  // ─── Verificação de viatura ──────────────────────────────────────────────────
+  // ── Cotas por escopo ────────────────────────────────────────────────────────
+
+  async calcularCotasPorOperacao(operacaoId: number): Promise<CotasPorTipo[]> {
+    const rows = await this.repo
+      .createQueryBuilder('e')
+      .select('e.tipo_escala', 'tipo_escala')
+      .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'totalCotas')
+      .where('e.operacao_id = :operacaoId', { operacaoId })
+      .groupBy('e.tipo_escala')
+      .getRawMany<{ tipo_escala: string; totalCotas: string }>();
+
+    return rows.map((r) => ({
+      tipo_escala: r.tipo_escala,
+      totalCotas: Number(r.totalCotas),
+    }));
+  }
+
+  async calcularCotasPorEvento(eventoId: number): Promise<CotasPorTipo[]> {
+    const rows = await this.repo
+      .createQueryBuilder('e')
+      .select('e.tipo_escala', 'tipo_escala')
+      .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'totalCotas')
+      .innerJoin('e.operacao', 'op')
+      .where('op.evento_id = :eventoId', { eventoId })
+      .groupBy('e.tipo_escala')
+      .getRawMany<{ tipo_escala: string; totalCotas: string }>();
+
+    return rows.map((r) => ({
+      tipo_escala: r.tipo_escala,
+      totalCotas: Number(r.totalCotas),
+    }));
+  }
+
+  async calcularCotasPorDistribuicao(
+    distribuicaoId: number,
+  ): Promise<CotasPorTipo[]> {
+    const rows = await this.repo
+      .createQueryBuilder('e')
+      .select('e.tipo_escala', 'tipo_escala')
+      .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'totalCotas')
+      .innerJoin('e.operacao', 'op')
+      .innerJoin('op.evento', 'ev')
+      .where('ev.distribuicao_id = :distribuicaoId', { distribuicaoId })
+      .groupBy('e.tipo_escala')
+      .getRawMany<{ tipo_escala: string; totalCotas: string }>();
+
+    return rows.map((r) => ({
+      tipo_escala: r.tipo_escala,
+      totalCotas: Number(r.totalCotas),
+    }));
+  }
+
+  // ── Privados ────────────────────────────────────────────────────────────────
+
   private async verificarViatura(
     viaturaId: number | null | undefined,
     funcao: string,
     omeId: number,
   ): Promise<void> {
-    if (!viaturaId) return; // viatura é opcional — sem id, sem verificação
+    if (!viaturaId) return;
 
     if (!this.FUNCOES_COM_VIATURA.includes(funcao)) {
       throw new BadRequestException(
@@ -64,45 +122,40 @@ export class EscalaService {
     }
   }
 
-  // ─── Método para buscar dados combinados: ───────────────────────────────────────
-
-  // ✅ Uma única query traz user + sgp + ome + conta
-  private async buscarDadosParaEscala(usuarioId: number): Promise<{
+  // Busca o usuário (com conta e ome) e o registro correspondente em dadosSgp.
+  // Lança BadRequest se não houver SGP — não faz sentido escalar sem vínculo.
+  private async buscarUsuario(usuarioId: number): Promise<{
     usuario: UserEntity;
-    sgp: DadosSgpEntity | null;
+    sgp: DadosSgpEntity;
   }> {
-    const row = await this.userRepo
+    const usuario = await this.userRepo
       .createQueryBuilder('u')
-      .leftJoinAndMapOne('u.conta', 'u.conta', 'conta')
-      .leftJoinAndMapOne('u.ome', 'u.ome', 'ome')
+      .leftJoinAndSelect('u.conta', 'conta')
+      .leftJoinAndSelect('u.ome', 'ome')
       .where('u.id = :id', { id: usuarioId })
       .getOne();
 
-    if (!row) throw new NotFoundException('Usuário não encontrado');
+    if (!usuario) throw new NotFoundException('Usuário não encontrado');
 
     const sgp = await this.dadosSgpRepo.findOne({
-      where: { matSgp: row.mat },
-      select: {
-        pgSgp: true,
-        nomeGuerraSgp: true,
-        tipoSgp: true,
-        cpfSgp: true,
-        nunfuncSgp: true,
-        nunvincSgp: true,
-        localApresentacaoSgp: true,
-        situacaoSgp: true,
-      },
+      where: { matSgp: usuario.mat },
     });
 
-    return { usuario: row, sgp };
+    if (!sgp) {
+      throw new BadRequestException(
+        `Não foi encontrado registro em dadosSgp para a matrícula ${usuario.mat}. ` +
+          `Não é possível criar escala sem vínculo com o SGP.`,
+      );
+    }
+
+    return { usuario, sgp };
   }
 
-  // ─── Verificação de OME para AUXILIAR ───────────────────────────────────────
   private async verificarPermissaoOme(
     operacaoId: number,
     usuarioLogado: { id: number; typeUser: number; omeId: number },
   ): Promise<void> {
-    if (Number(usuarioLogado.typeUser) !== UserType.AUXILIAR) return; // ✅ só restringe AUXILIAR
+    if (Number(usuarioLogado.typeUser) !== UserType.AUXILIAR) return;
 
     const operacao = await this.operacaoRepo.findOne({
       where: { id: operacaoId },
@@ -120,21 +173,19 @@ export class EscalaService {
     }
   }
 
-  // ─── Cálculo da cota ────────────────────────────────────────────────────────
   private calcularCota(horaInicio: string, horaFim: string): number {
     return horaInicio === horaFim ? 2 : 1;
   }
 
-  // ─── Verificação de conflito ─────────────────────────────────────────────────
   private async verificarConflito(
-    mat: string,
+    matEscala: string,
     dataInicio: string,
     sistema: string,
     excludeId?: number,
   ): Promise<void> {
     const qb = this.repo
       .createQueryBuilder('e')
-      .where('e.mat = :mat', { mat })
+      .where('e.mat_escala = :matEscala', { matEscala })
       .andWhere('e.data_inicio = :dataInicio', { dataInicio })
       .andWhere('e.sistema = :sistema', { sistema });
 
@@ -143,19 +194,17 @@ export class EscalaService {
     const existe = await qb.getExists();
     if (existe) {
       throw new BadRequestException(
-        `Matrícula ${mat} já está escalada nesta data para o sistema ${sistema}`,
+        `Matrícula ${matEscala} já está escalada em ${dataInicio} para o sistema ${sistema}`,
       );
     }
   }
 
-  // ─── Verificação do teto ─────────────────────────────────────────────────────
   private async verificarTeto(
     operacaoId: number,
     tipoEscala: string,
     novaCota: number,
     excludeId?: number,
   ): Promise<void> {
-    // ✅ duas queries paralelas — sem problema de GROUP BY
     const [operacao, somaResult] = await Promise.all([
       this.operacaoRepo.findOneBy({ id: operacaoId }),
 
@@ -168,13 +217,13 @@ export class EscalaService {
 
         if (excludeId) qb.andWhere('e.id != :excludeId', { excludeId });
 
-        return qb.getRawOne();
+        return qb.getRawOne<{ soma: string }>();
       })(),
     ]);
 
     if (!operacao) throw new NotFoundException('Operação não encontrada');
 
-    const somaAtual = Number(somaResult.soma);
+    const somaAtual = Number(somaResult?.soma ?? 0);
 
     if (
       tipoEscala === 'O' &&
@@ -192,7 +241,6 @@ export class EscalaService {
     }
   }
 
-  // ─── Verificação de status do evento ────────────────────────────────────────
   private async verificarStatusEvento(operacaoId: number): Promise<void> {
     const operacao = await this.operacaoRepo.findOne({
       where: { id: operacaoId },
@@ -219,7 +267,8 @@ export class EscalaService {
     }
   }
 
-  // ─── FIND MINHAS ESCALAS (usuário logado) ────────────────────────────────────
+  // ── Find minhas escalas ─────────────────────────────────────────────────────
+
   async findMinhasEscalas(usuarioLogado: {
     id: number;
     mat: string;
@@ -229,60 +278,113 @@ export class EscalaService {
       .leftJoinAndSelect('e.viatura', 'viatura')
       .leftJoinAndSelect('e.operacao', 'operacao')
       .leftJoinAndSelect('operacao.evento', 'evento')
-      .leftJoinAndSelect('evento.ome', 'ome') // ✅ garante nomeOme
-      .where('e.mat = :mat', { mat: usuarioLogado.mat })
+      .leftJoinAndSelect('evento.distribuicao', 'distribuicao')
+      .leftJoinAndSelect('distribuicao.teto', 'teto')
+      .leftJoinAndSelect('evento.ome', 'ome')
+      .leftJoinAndSelect('e.conta', 'conta')
+      .leftJoinAndSelect('e.usuario', 'usuario')
+      .where('e.usuario_id = :usuarioId', { usuarioId: usuarioLogado.id })
       .orderBy('e.data_inicio', 'ASC')
       .addOrderBy('e.hora_inicio', 'ASC')
       .getMany();
 
-    return escalas.map((e) => new ReturnEscalaDto(e));
+    const agrupadoPorTeto = new Map<number | null, EscalaEntity[]>();
+    for (const escala of escalas) {
+      const idTeto = escala?.operacao?.evento?.distribuicao?.teto?.id ?? null;
+      if (!agrupadoPorTeto.has(idTeto)) agrupadoPorTeto.set(idTeto, []);
+      agrupadoPorTeto.get(idTeto)!.push(escala);
+    }
+
+    const somasPorTeto = new Map<number | null, number>();
+    for (const [idTeto, escalasTeto] of agrupadoPorTeto.entries()) {
+      const soma = escalasTeto.reduce(
+        (acc, e) => acc + (e.cota_escala || 0),
+        0,
+      );
+      somasPorTeto.set(idTeto, soma);
+    }
+
+    return escalas.map((e) => {
+      const idTeto = e?.operacao?.evento?.distribuicao?.teto?.id ?? null;
+      const somacota_escala = somasPorTeto.get(idTeto) || 0;
+
+      let valorMultiplicador = 1;
+      if (e.sistema === 'PJES') {
+        if (e.tipo_escala === 'O') valorMultiplicador = 300;
+        else if (e.tipo_escala === 'P') valorMultiplicador = 200;
+      } else if (e.sistema === 'DIARIAS') {
+        valorMultiplicador = 180;
+      }
+      const somaCotaFinal = somacota_escala * valorMultiplicador;
+
+      let pagamento: string | null = null;
+      if (e.sistema === 'PJES') {
+        const statusTeto = e?.operacao?.evento?.distribuicao?.teto?.status;
+        if (statusTeto === 'ABERTO') pagamento = 'Pendente';
+        else if (statusTeto === 'ENCERRADO') pagamento = 'Pago';
+      } else if (e.sistema === 'DIARIAS') {
+        const statusEvento = e?.operacao?.evento?.status_evento;
+        const dataStatus = e?.operacao?.evento?.updated_at;
+        pagamento = statusEvento
+          ? `${statusEvento}${dataStatus ? ' - ' + new Date(dataStatus).toLocaleString('pt-BR') : ''}`
+          : null;
+      }
+
+      return {
+        ...new ReturnEscalaDto(e),
+        somacota_escala,
+        somaCotaFinal,
+        pagamento,
+      };
+    });
   }
 
-  // ─── CREATE ─────────────────────────────────────────────────────────────────
+  // ── Create ──────────────────────────────────────────────────────────────────
+
   async create(
     dto: CreateEscalaDto,
     usuarioLogado: { id: number; typeUser: number; omeId: number },
   ): Promise<ReturnEscalaDto> {
     const [{ usuario, sgp }] = await Promise.all([
-      this.buscarDadosParaEscala(dto.usuarioId),
+      this.buscarUsuario(dto.usuarioId),
       this.verificarPermissaoOme(dto.operacaoId, usuarioLogado),
       this.verificarStatusEvento(dto.operacaoId),
-      // ✅ valida viatura junto com as outras verificações iniciais
       this.verificarViatura(dto.viaturaId, dto.funcao, usuarioLogado.omeId),
     ]);
 
-    const tipoEscala = sgp?.tipoSgp ?? 'P';
     const cota = this.calcularCota(dto.horaInicio, dto.horaFim);
 
     await Promise.all([
-      this.verificarConflito(usuario.mat, dto.dataInicio, dto.sistema),
-      this.verificarTeto(dto.operacaoId, tipoEscala, cota),
+      this.verificarConflito(sgp.matSgp, dto.dataInicio, dto.sistema),
+      this.verificarTeto(dto.operacaoId, sgp.tipoSgp, cota),
     ]);
 
     const escala = this.repo.create({
       sistema: dto.sistema,
-      mat: usuario.mat,
       operacao: { id: dto.operacaoId },
       usuario: { id: dto.usuarioId },
-      cpf_escala: sgp?.cpfSgp ?? '',
-      pg_escala: sgp?.pgSgp ?? '',
-      tipo_escala: tipoEscala,
-      nome_escala: sgp?.nomeGuerraSgp ?? '',
-      phone_escala: usuario.phone ?? '',
+
+      // Snapshot do SGP — buscado automaticamente pelo backend
+      pg_escala: sgp.pgSgp,
+      mat_escala: sgp.matSgp,
+      ng_escala: sgp.nomeGuerraSgp,
+      tipo_escala: sgp.tipoSgp,
+      cpf_escala: sgp.cpfSgp,
+      nomecompleto_escala: sgp.nomeCompletoSgp,
       nomeome_escala: usuario.ome?.nomeOme ?? '',
-      banco_escala: usuario.conta?.banco ?? '',
-      agencia_escala: usuario.conta?.agencia ?? '',
-      conta_escala: usuario.conta?.conta ?? '',
+      nunfunc_escala: sgp.nunfuncSgp,
+      nunvinc_escala: sgp.nunvincSgp,
+
+      conta: usuario.conta ?? undefined,
       dataInicio: dto.dataInicio,
       horaInicio: dto.horaInicio,
       horaFim: dto.horaFim,
       cota_escala: cota,
       localApresentacao:
-        dto.localApresentacao ?? sgp?.localApresentacaoSgp ?? 'SEDE DA OME',
+        dto.localApresentacao ?? sgp.localApresentacaoSgp ?? 'SEDE DA OME',
       funcao: dto.funcao,
       situacao: dto.situacao ?? 'REGULAR',
       anotacoes: dto.anotacoes,
-      // ✅ undefined é ignorado pelo TypeORM — sem problema
       viaturaId: dto.viaturaId ?? undefined,
     });
 
@@ -293,14 +395,15 @@ export class EscalaService {
       const dbError = error as { driverError?: { code?: string } };
       if (dbError?.driverError?.code === '23505') {
         throw new BadRequestException(
-          `Matrícula ${escala.mat} já está escalada nesta data para o sistema ${escala.sistema}`,
+          `Matrícula ${sgp.matSgp} já está escalada em ${dto.dataInicio} para ${dto.sistema}`,
         );
       }
       throw error;
     }
   }
 
-  // ─── UPDATE ──────────────────────────────────────────────────────────────────
+  // ── Update ──────────────────────────────────────────────────────────────────
+
   async update(
     id: number,
     dto: UpdateEscalaDto,
@@ -313,47 +416,47 @@ export class EscalaService {
     if (!escala) throw new NotFoundException('Escala não encontrada');
 
     const operacaoId = dto.operacaoId ?? escala.operacao.id;
-
-    // ✅ funcao final = a que vier no dto ou a que já estava na escala
     const funcaoFinal = dto.funcao ?? escala.funcao;
 
-    const [, , dadosNovos] = await Promise.all([
+    const [, , novoUsuario] = await Promise.all([
       this.verificarPermissaoOme(operacaoId, usuarioLogado),
       this.verificarStatusEvento(operacaoId),
-      dto.usuarioId
-        ? this.buscarDadosParaEscala(dto.usuarioId)
-        : Promise.resolve(null),
-      // ✅ valida viatura no update também
+      dto.usuarioId ? this.buscarUsuario(dto.usuarioId) : Promise.resolve(null),
       this.verificarViatura(dto.viaturaId, funcaoFinal, usuarioLogado.omeId),
     ]);
 
-    if (dadosNovos) {
-      const { usuario, sgp } = dadosNovos;
-      escala.mat = usuario.mat;
-      escala.cpf_escala = sgp?.cpfSgp ?? '';
-      escala.pg_escala = sgp?.pgSgp ?? '';
-      escala.tipo_escala = sgp?.tipoSgp ?? 'P';
-      escala.nome_escala = sgp?.nomeGuerraSgp ?? '';
-      escala.phone_escala = usuario.phone ?? '';
-      escala.nomeome_escala = usuario.ome?.nomeOme ?? '';
-      escala.banco_escala = usuario.conta?.banco ?? '';
-      escala.agencia_escala = usuario.conta?.agencia ?? '';
-      escala.conta_escala = usuario.conta?.conta ?? '';
+    if (novoUsuario) {
+      const { usuario, sgp } = novoUsuario;
       escala.usuario = { id: dto.usuarioId } as UserEntity;
+      escala.conta = usuario.conta ?? undefined;
+      escala.nomeome_escala = usuario.ome?.nomeOme ?? escala.nomeome_escala;
+      // Atualiza o snapshot inteiro quando o usuário muda
+      escala.pg_escala = sgp.pgSgp;
+      escala.mat_escala = sgp.matSgp;
+      escala.ng_escala = sgp.nomeGuerraSgp;
+      escala.tipo_escala = sgp.tipoSgp;
+      escala.cpf_escala = sgp.cpfSgp;
+      escala.nomecompleto_escala = sgp.nomeCompletoSgp;
+      escala.nunfunc_escala = sgp.nunfuncSgp;
+      escala.nunvinc_escala = sgp.nunvincSgp;
     }
 
+    const novaMatEscala = escala.mat_escala;
     const novaData = dto.dataInicio ?? escala.dataInicio;
     const novaSistema = dto.sistema ?? escala.sistema;
     const novaHoraInicio = dto.horaInicio ?? escala.horaInicio;
     const novaHoraFim = dto.horaFim ?? escala.horaFim;
+    const novaTipo = escala.tipo_escala;
     const novaCota = this.calcularCota(novaHoraInicio, novaHoraFim);
 
     await Promise.all([
-      this.verificarConflito(escala.mat, novaData, novaSistema, id),
-      this.verificarTeto(operacaoId, escala.tipo_escala, novaCota, id),
+      this.verificarConflito(novaMatEscala, novaData, novaSistema, id),
+      this.verificarTeto(operacaoId, novaTipo, novaCota, id),
     ]);
 
     Object.assign(escala, {
+      ...(dto.sistema && { sistema: dto.sistema }),
+      ...(dto.operacaoId && { operacao: { id: dto.operacaoId } }),
       ...(dto.dataInicio && { dataInicio: dto.dataInicio }),
       ...(dto.horaInicio && { horaInicio: dto.horaInicio }),
       ...(dto.horaFim && { horaFim: dto.horaFim }),
@@ -364,38 +467,58 @@ export class EscalaService {
       ...(dto.funcao && { funcao: dto.funcao }),
       ...(dto.situacao && { situacao: dto.situacao }),
       ...(dto.anotacoes !== undefined && { anotacoes: dto.anotacoes }),
-      ...(dto.operacaoId && { operacao: { id: dto.operacaoId } }),
-      ...(dto.sistema && { sistema: dto.sistema }),
-      // ✅ viaturaId: atualiza se veio no dto; null para remover; undefined para manter
       ...(dto.viaturaId !== undefined && { viaturaId: dto.viaturaId ?? null }),
     });
 
-    await this.repo.save(escala);
+    try {
+      await this.repo.save(escala);
+    } catch (error: unknown) {
+      const dbError = error as { driverError?: { code?: string } };
+      if (dbError?.driverError?.code === '23505') {
+        throw new BadRequestException(
+          `Matrícula ${novaMatEscala} já está escalada em ${novaData} para ${novaSistema}`,
+        );
+      }
+      throw error;
+    }
+
     return this.findOne(id);
   }
 
-  // ─── FIND BY OPERACAO ────────────────────────────────────────────────────────
-  async findByOperacao(operacaoId: number): Promise<ReturnEscalaDto[]> {
-    const escalas = await this.repo.find({
-      where: { operacao: { id: operacaoId } },
-      relations: { viatura: true }, // ✅ carrega os dados da viatura
-      order: { dataInicio: 'ASC', horaInicio: 'ASC' },
-    });
+  // ── Find by operacao ────────────────────────────────────────────────────────
 
-    return escalas.map((e) => new ReturnEscalaDto(e));
+  async findByOperacao(operacaoId: number): Promise<ReturnEscalaOperacaoDto> {
+    const escalas = await this.repo
+      .createQueryBuilder('e')
+      .leftJoinAndSelect('e.viatura', 'viatura')
+      .leftJoinAndSelect('e.usuario', 'usuario')
+      .leftJoinAndSelect('e.conta', 'conta')
+      .where('e.operacao_id = :operacaoId', { operacaoId })
+      .orderBy('e.data_inicio', 'ASC')
+      .addOrderBy('e.hora_inicio', 'ASC')
+      .getMany();
+
+    const dtos = escalas.map((e) => new ReturnEscalaDto(e));
+    return new ReturnEscalaOperacaoDto(dtos);
   }
 
-  // ─── FIND ONE ────────────────────────────────────────────────────────────────
+  // ── Find one ────────────────────────────────────────────────────────────────
+
   async findOne(id: number): Promise<ReturnEscalaDto> {
-    const escala = await this.repo.findOne({
-      where: { id },
-      relations: { viatura: true }, // ✅ carrega os dados da viatura
-    });
+    const escala = await this.repo
+      .createQueryBuilder('e')
+      .leftJoinAndSelect('e.viatura', 'viatura')
+      .leftJoinAndSelect('e.usuario', 'usuario')
+      .leftJoinAndSelect('e.conta', 'conta')
+      .where('e.id = :id', { id })
+      .getOne();
+
     if (!escala) throw new NotFoundException('Escala não encontrada');
     return new ReturnEscalaDto(escala);
   }
 
-  // ─── FIND BY MATRICULA — PJES ────────────────────────────────────────────────
+  // ── Find by matrícula — PJES ─────────────────────────────────────────────────
+
   async findByMatriculaPjes(
     mat: string,
     mes: number,
@@ -403,7 +526,7 @@ export class EscalaService {
   ): Promise<ReturnEscalaDto[]> {
     const escalas = await this.repo
       .createQueryBuilder('e')
-      .where('e.mat = :mat', { mat })
+      .where('e.mat_escala = :mat', { mat })
       .andWhere('e.sistema = :sistema', { sistema: 'PJES' })
       .andWhere('EXTRACT(MONTH FROM e.data_inicio) = :mes', { mes })
       .andWhere('EXTRACT(YEAR FROM e.data_inicio) = :ano', { ano })
@@ -414,7 +537,8 @@ export class EscalaService {
     return escalas.map((e) => new ReturnEscalaDto(e));
   }
 
-  // ─── FIND BY MATRICULA — DIARIAS ─────────────────────────────────────────────
+  // ── Find by matrícula — DIARIAS ───────────────────────────────────────────────
+
   async findByMatriculaDiarias(
     mat: string,
     dataInicio: string,
@@ -422,7 +546,7 @@ export class EscalaService {
   ): Promise<ReturnEscalaDto[]> {
     const escalas = await this.repo
       .createQueryBuilder('e')
-      .where('e.mat = :mat', { mat })
+      .where('e.mat_escala = :mat', { mat })
       .andWhere('e.sistema = :sistema', { sistema: 'DIARIAS' })
       .andWhere('e.data_inicio BETWEEN :dataInicio AND :dataFim', {
         dataInicio,
@@ -435,7 +559,8 @@ export class EscalaService {
     return escalas.map((e) => new ReturnEscalaDto(e));
   }
 
-  // ─── DELETE ──────────────────────────────────────────────────────────────────
+  // ── Delete ──────────────────────────────────────────────────────────────────
+
   async remove(
     id: number,
     usuarioLogado: { id: number; typeUser: number; omeId: number },
@@ -448,7 +573,7 @@ export class EscalaService {
 
     await Promise.all([
       this.verificarPermissaoOme(escala.operacao.id, usuarioLogado),
-      this.verificarStatusEvento(escala.operacao.id), // ✅ adicionar
+      this.verificarStatusEvento(escala.operacao.id),
     ]);
 
     await this.repo.delete(id);

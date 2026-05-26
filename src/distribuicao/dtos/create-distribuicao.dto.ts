@@ -3,18 +3,18 @@ import { IsInt, IsNotEmpty, IsNumber, IsString } from 'class-validator';
 
 export class CreateDistribuicaoDto {
   @IsInt()
-  teto_id: number;
+  teto_id!: number;
 
   @IsInt()
-  diretoria_id: number;
+  diretoria_id!: number;
 
   @IsString()
   @IsNotEmpty()
-  nome_dist: string;
+  nome_dist!: string;
 
   @IsInt()
-  qtd_dist_of: number;
+  qtd_dist_of!: number;
 
   @IsInt()
-  qtd_dist_prc: number;
+  qtd_dist_prc!: number;
 }

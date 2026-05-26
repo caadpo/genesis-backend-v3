@@ -10,34 +10,38 @@ import { StatusTeto } from '../enum/teto-type.enum';
 
 export class CreateTetoDto {
   @IsEnum(Sistema)
-  sistema: Sistema;
+  sistema!: Sistema;
 
   @IsString()
-  nome_verba: string;
+  nome_verba!: string;
 
   @IsString()
-  cod_verba: string;
+  cod_verba!: string;
 
   @IsNumber()
-  valor_total: number;
+  valor_total!: number;
 
   @IsNumber()
-  ttctof: number;
+  ttctof!: number;
 
   @IsNumber()
-  ttctprc: number;
+  ttctprc!: number;
 
   @IsDateString()
-  data_inicio: string;
+  data_inicio!: string;
 
   @IsOptional()
   @IsDateString()
   data_fim?: string;
 
   @IsEnum(TipoPeriodo)
-  tipo_periodo: TipoPeriodo;
+  tipo_periodo!: TipoPeriodo;
 
   @IsOptional()
   @IsEnum(StatusTeto)
   status?: StatusTeto;
+
+  @IsOptional()
+  @IsString()
+  imagemUrl?: string;
 }

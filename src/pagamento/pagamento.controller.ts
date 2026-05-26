@@ -37,4 +37,18 @@ export class PagamentoController {
   findByEvento(@Param('eventoId', ParseIntPipe) eventoId: number) {
     return this.service.findByEvento(eventoId);
   }
+
+  // ✅ Lista todos os pagamentos
+  @Get()
+  @Roles(UserType.MASTER, UserType.FINANCEIRO, UserType.PD, UserType.DIRETOR)
+  findAll() {
+    return this.service.findAll();
+  }
+
+  // ✅ Busca um pagamento por ID
+  @Get(':id')
+  @Roles(UserType.MASTER, UserType.FINANCEIRO, UserType.PD, UserType.DIRETOR)
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.service.findOne(id);
+  }
 }

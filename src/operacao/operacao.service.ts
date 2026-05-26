@@ -198,10 +198,14 @@ export class OperacaoService {
       .groupBy('e.tipo_escala')
       .getRawMany();
 
-    return result.map((r) => ({
-      tipo_escala: r.tipo_escala,
-      totalCotas: Number(r.totalCotas),
-    }));
+    const tipos = ['O', 'P'];
+    return tipos.map((tipo) => {
+      const found = result.find((r) => r.tipo_escala === tipo);
+      return {
+        tipo_escala: tipo,
+        totalCotas: found ? Number(found.totalCotas) : 0,
+      };
+    });
   }
 
   async findAll(eventoId?: number): Promise<ReturnOperacaoComTotalCotasDto[]> {

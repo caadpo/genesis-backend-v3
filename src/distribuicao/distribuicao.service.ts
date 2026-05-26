@@ -1,4 +1,3 @@
-// src/distribuicao/distribuicao.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -102,7 +101,6 @@ export class DistribuicaoService {
 
   async create(dto: CreateDistribuicaoDto): Promise<Distribuicao> {
     return this.distribuicaoRepo.manager.transaction(async (manager) => {
-      // 🔒 trava o teto
       const teto = await manager.findOne(Teto, {
         where: { id: dto.teto_id },
         lock: { mode: 'pessimistic_write' },
@@ -112,7 +110,6 @@ export class DistribuicaoService {
 
       this.validarTetoAberto(teto);
 
-      // 🔥 recalcula o resumo DENTRO da transação
       const result = await manager
         .createQueryBuilder(Distribuicao, 'd')
         .select('COALESCE(SUM(d.qtd_dist_of), 0)', 'soma_of')
@@ -157,6 +154,7 @@ export class DistribuicaoService {
     });
   }
 
+  // ✅ tipo_escala agora é coluna snapshot na própria tabela escala — sem join com dadosSgp
   private async getTotalCotasPorTipoDistribuicao(distId: number) {
     const rows = await this.escalaRepo
       .createQueryBuilder('e')
@@ -202,8 +200,6 @@ export class DistribuicaoService {
     if (tetoId) {
       qb.andWhere('t.id = :tetoId', { tetoId });
     }
-
-    // 🔥 REGRA DE VISUALIZAÇÃO CORRETA
 
     if (userCompleto.typeUser === UserType.DIRETOR) {
       qb.andWhere('dir.id = :diretoriaId', {
@@ -266,11 +262,12 @@ export class DistribuicaoService {
 
   async update(id: number, dto: Partial<CreateDistribuicaoDto>) {
     return this.distribuicaoRepo.manager.transaction(async (manager) => {
-      const distribuicao = await manager.findOne(Distribuicao, {
-        where: { id },
-        relations: ['teto'],
-        lock: { mode: 'pessimistic_write' },
-      });
+      const distribuicao = await manager
+        .createQueryBuilder(Distribuicao, 'd')
+        .innerJoinAndSelect('d.teto', 't')
+        .where('d.id = :id', { id })
+        .setLock('pessimistic_write')
+        .getOne();
 
       if (!distribuicao)
         throw new NotFoundException('Distribuição não encontrada');
@@ -308,11 +305,12 @@ export class DistribuicaoService {
 
   async remove(id: number) {
     return this.distribuicaoRepo.manager.transaction(async (manager) => {
-      const dist = await manager.findOne(Distribuicao, {
-        where: { id },
-        relations: ['teto'],
-        lock: { mode: 'pessimistic_write' },
-      });
+      const dist = await manager
+        .createQueryBuilder(Distribuicao, 'd')
+        .innerJoinAndSelect('d.teto', 't')
+        .where('d.id = :id', { id })
+        .setLock('pessimistic_write')
+        .getOne();
 
       if (!dist) throw new NotFoundException('Distribuição não encontrada');
 

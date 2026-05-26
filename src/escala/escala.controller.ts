@@ -10,7 +10,7 @@ import {
   Query,
   UseGuards,
   BadRequestException,
-  Request, // ✅ adicionar
+  Request,
 } from '@nestjs/common';
 import { CreateEscalaDto } from './dtos/create-escala.dto';
 import { UpdateEscalaDto } from './dtos/update-escala.dto';
@@ -58,8 +58,6 @@ export class EscalaController {
     UserType.MASTER,
     UserType.TECNICO,
     UserType.AUXILIAR,
-    UserType.DIRETOR,
-    UserType.ESTRATEGICO,
     UserType.FINANCEIRO,
     UserType.PD,
     UserType.COMUN,
@@ -99,23 +97,13 @@ export class EscalaController {
   }
 
   @Post()
-  @Roles(
-    UserType.MASTER,
-    UserType.TECNICO,
-    UserType.AUXILIAR,
-    UserType.FINANCEIRO,
-  )
+  @Roles(UserType.MASTER, UserType.TECNICO, UserType.AUXILIAR)
   create(@Body() dto: CreateEscalaDto, @Request() req: any) {
     return this.service.create(dto, req.user); // ✅ passa o usuário logado
   }
 
   @Patch(':id')
-  @Roles(
-    UserType.MASTER,
-    UserType.TECNICO,
-    UserType.AUXILIAR,
-    UserType.FINANCEIRO,
-  )
+  @Roles(UserType.MASTER, UserType.TECNICO, UserType.AUXILIAR)
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateEscalaDto,
@@ -125,12 +113,7 @@ export class EscalaController {
   }
 
   @Delete(':id')
-  @Roles(
-    UserType.MASTER,
-    UserType.TECNICO,
-    UserType.AUXILIAR,
-    UserType.FINANCEIRO,
-  )
+  @Roles(UserType.MASTER, UserType.TECNICO, UserType.AUXILIAR)
   remove(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
     return this.service.remove(id, req.user); // ✅ passa o usuário logado
   }

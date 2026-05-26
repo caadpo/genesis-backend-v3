@@ -15,15 +15,16 @@ import { UserEntity } from 'src/user/entities/user.entity';
 import { ReturnEventoDto } from './dtos/return-evento.dto';
 import { StatusEvento } from './enum/eventos-status.enum';
 import { UserType } from 'src/user/enum/user-type.enum';
-// ─── Novos imports ───────────────────────────────────────────────────────────
 import { EscalaEntity } from 'src/escala/entities/escala.entity';
 import {
   ReturnEventoComEscalasDto,
   UsuarioResumoEscalaDto,
 } from './dtos/return-evento-com-escalas.dto';
-import { DadosSgpEntity } from 'src/dadossgp/entities/dadossgp.entity';
 import { Operacao } from 'src/operacao/entities/operacao.entity';
-import { ReturnEventoComTotalCotasDto } from './dtos/return-evento-com-total-cotas.dto';
+import {
+  ReturnEventoComTotalCotasDto,
+  TotalCotasPorTipo,
+} from './dtos/return-evento-com-total-cotas.dto';
 
 @Injectable()
 export class EventoService {
@@ -40,32 +41,14 @@ export class EventoService {
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
 
-    @InjectRepository(DadosSgpEntity)
-    private readonly dadosSgpRepo: Repository<DadosSgpEntity>,
-
     @InjectRepository(OmeEntity)
     private readonly omeRepo: Repository<OmeEntity>,
 
-    // ─── Novo InjectRepository no construtor ────────────────────────────────────
     @InjectRepository(EscalaEntity)
     private readonly escalaRepo: Repository<EscalaEntity>,
   ) {}
 
-  // ✅ helper: dado um array de mats, retorna map mat → "PG NomeGuerra"
-  private async buildNomeMap(mats: string[]): Promise<Map<string, string>> {
-    if (!mats.length) return new Map();
-
-    const sgps = await this.dadosSgpRepo.find({
-      where: mats.map((mat) => ({ matSgp: mat })),
-      select: { matSgp: true, pgSgp: true, nomeGuerraSgp: true },
-    });
-
-    return new Map(
-      sgps.map((s) => [s.matSgp, `${s.pgSgp} ${s.nomeGuerraSgp}`]),
-    );
-  }
-
-  // ─── Método getResumoEscalas ─────────────────────────────────────────────────
+  // ─── getResumoEscalas ────────────────────────────────────────────────────────
   async getResumoEscalas(eventoId: number): Promise<ReturnEventoComEscalasDto> {
     const evento = await this.eventoRepo.findOne({
       where: { id: eventoId },
@@ -81,75 +64,60 @@ export class EventoService {
     });
     if (!evento) throw new NotFoundException('Evento não encontrado');
 
-    // ─── Escalas agrupadas por usuário ──────────────────────────────────────
+    // ✅ Todos os campos de identificação do policial vêm das colunas snapshot
+    //    da própria tabela escala — sem join com dadosSgp
     const rows = await this.escalaRepo
       .createQueryBuilder('e')
       .select('e.usuario_id', 'usuarioId')
-      .addSelect('e.mat', 'mat')
+      .addSelect('e.mat_escala', 'mat')
       .addSelect('e.pg_escala', 'pg')
-      .addSelect('e.nome_escala', 'nomeGuerra')
+      .addSelect('e.nomecompleto_escala', 'nomeCompleto')
       .addSelect('e.nomeome_escala', 'nomeOme')
-      .addSelect('e.phone_escala', 'phone')
+      .addSelect('u.phone', 'phone')
       .addSelect('e.cpf_escala', 'cpf')
       .addSelect('e.tipo_escala', 'tipo')
-      .addSelect('e.banco_escala', 'banco')
-      .addSelect('e.agencia_escala', 'agencia')
-      .addSelect('e.conta_escala', 'conta')
+      .addSelect('e.nunfunc_escala', 'nunfunc')
+      .addSelect('e.nunvinc_escala', 'nunvinc')
+      .addSelect('c.banco', 'banco')
+      .addSelect('c.agencia', 'agencia')
+      .addSelect('c.conta', 'conta')
       .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'totalCotas')
       .innerJoin('e.operacao', 'op')
       .innerJoin('op.evento', 'ev')
+      .innerJoin('e.usuario', 'u') // ✅ apenas para phone (não existe no snapshot)
+      .leftJoin('e.conta', 'c') // ✅ left join para dados bancários (nullable)
       .where('ev.id = :eventoId', { eventoId })
       .groupBy('e.usuario_id')
-      .addGroupBy('e.mat')
+      .addGroupBy('e.mat_escala')
       .addGroupBy('e.pg_escala')
-      .addGroupBy('e.nome_escala')
+      .addGroupBy('e.nomecompleto_escala')
       .addGroupBy('e.nomeome_escala')
-      .addGroupBy('e.phone_escala')
+      .addGroupBy('u.phone')
       .addGroupBy('e.cpf_escala')
       .addGroupBy('e.tipo_escala')
-      .addGroupBy('e.banco_escala')
-      .addGroupBy('e.agencia_escala')
-      .addGroupBy('e.conta_escala')
+      .addGroupBy('e.nunfunc_escala')
+      .addGroupBy('e.nunvinc_escala')
+      .addGroupBy('c.banco')
+      .addGroupBy('c.agencia')
+      .addGroupBy('c.conta')
       .orderBy('e.nomeome_escala', 'ASC')
       .addOrderBy('e.pg_escala', 'ASC')
-      .addOrderBy('e.nome_escala', 'ASC')
+      .addOrderBy('e.nomecompleto_escala', 'ASC')
       .getRawMany();
 
-    // ─── Totais por tipo ─────────────────────────────────────────────────────
-    const [rowsComTipo, dadosSgpRows] = await Promise.all([
-      this.escalaRepo
-        .createQueryBuilder('e')
-        .select('e.tipo_escala', 'tipo')
-        .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'soma')
-        .innerJoin('e.operacao', 'op')
-        .innerJoin('op.evento', 'ev')
-        .where('ev.id = :eventoId', { eventoId })
-        .groupBy('e.tipo_escala')
-        .getRawMany(),
+    // ✅ tipo_escala lido diretamente da coluna snapshot — sem join com dadosSgp
+    const rowsComTipo = await this.escalaRepo
+      .createQueryBuilder('e')
+      .select('e.tipo_escala', 'tipo')
+      .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'soma')
+      .innerJoin('e.operacao', 'op')
+      .innerJoin('op.evento', 'ev')
+      .where('ev.id = :eventoId', { eventoId })
+      .groupBy('e.tipo_escala')
+      .getRawMany();
 
-      // ✅ nunfunc/nunvinc vêm do SGP — busca por mat (já presente nos rows)
-      rows.length
-        ? this.dadosSgpRepo.find({
-            where: [...new Set(rows.map((r) => String(r.mat)))].map((mat) => ({
-              matSgp: mat,
-            })),
-            select: {
-              matSgp: true,
-              nunfuncSgp: true,
-              nunvincSgp: true,
-            },
-          })
-        : Promise.resolve([]),
-    ]);
-
-    const sgpMap = new Map(
-      dadosSgpRows.map((d) => [
-        d.matSgp,
-        { nunfunc: d.nunfuncSgp, nunvinc: d.nunvincSgp },
-      ]),
-    );
-
-    // ─── Monta nomes dos responsáveis pelo evento via SGP ───────────────────
+    // ✅ Nomes dos responsáveis via campos snapshot das próprias escalas;
+    //    para quem não escalou (criador do evento, etc.) montamos via pg+ng direto do user
     const matsResponsaveis = [
       evento.user?.mat,
       evento.homologado_por?.mat,
@@ -157,7 +125,10 @@ export class EventoService {
       evento.pago_por?.mat,
     ].filter(Boolean) as string[];
 
-    const nomeMap = await this.buildNomeMap(matsResponsaveis);
+    const nomeMap = await this.buildNomeMapFromEscala(
+      eventoId,
+      matsResponsaveis,
+    );
 
     const somaOf = Number(rowsComTipo.find((r) => r.tipo === 'O')?.soma ?? 0);
     const somaPrc = Number(rowsComTipo.find((r) => r.tipo === 'P')?.soma ?? 0);
@@ -165,17 +136,18 @@ export class EventoService {
     const usuariosDto: UsuarioResumoEscalaDto[] = rows.map((r) => ({
       usuarioId: Number(r.usuarioId),
       mat: String(r.mat),
-      pg: r.pg,
-      nomeGuerra: r.nomeGuerra,
-      nomeOme: r.nomeOme,
+      pg: r.pg ?? '-',
+      nomeGuerra: r.nomeGuerra ?? '-',
+      nomeCompleto: r.nomeCompleto ?? '-',
+      nomeOme: r.nomeOme ?? '-',
       phone: r.phone ?? '-',
-      cpf: r.cpf,
-      tipo: r.tipo,
-      nunfunc: sgpMap.get(String(r.mat))?.nunfunc ?? '-',
-      nunvinc: sgpMap.get(String(r.mat))?.nunvinc ?? '-',
-      banco: r.banco,
-      agencia: r.agencia,
-      conta: r.conta,
+      cpf: r.cpf ?? '-',
+      tipo: r.tipo ?? '-',
+      nunfunc: r.nunfunc ?? '-',
+      nunvinc: r.nunvinc ?? '-',
+      banco: r.banco ?? '-',
+      agencia: r.agencia ?? '-',
+      conta: r.conta ?? '-',
       totalCotas: Number(r.totalCotas),
     }));
 
@@ -220,7 +192,33 @@ export class EventoService {
     };
   }
 
-  // Metodo que busca o usuario completo com suas relações
+  /**
+   * Constrói o mapa mat → "pg nomeGuerra" usando os campos snapshot das escalas
+   * do próprio evento. Para responsáveis que não tenham escala no evento
+   * (ex.: quem homologou mas não está escalado), o nome fica undefined e o
+   * caller pode tratar como preferir.
+   */
+  private async buildNomeMapFromEscala(
+    eventoId: number,
+    mats: string[],
+  ): Promise<Map<string, string>> {
+    if (!mats.length) return new Map();
+
+    const rows = await this.escalaRepo
+      .createQueryBuilder('e')
+      .select('e.mat_escala', 'mat')
+      .addSelect('e.pg_escala', 'pg')
+      .addSelect('e.ng_escala', 'ng')
+      .innerJoin('e.operacao', 'op')
+      .innerJoin('op.evento', 'ev')
+      .where('ev.id = :eventoId', { eventoId })
+      .andWhere('e.mat_escala IN (:...mats)', { mats })
+      .distinctOn(['e.mat_escala'])
+      .getRawMany();
+
+    return new Map(rows.map((r) => [r.mat, `${r.pg} ${r.ng}`]));
+  }
+
   private async getUserCompleto(userId: number): Promise<UserEntity> {
     const user = await this.userRepo.findOne({
       where: { id: userId },
@@ -239,6 +237,7 @@ export class EventoService {
       where: { id },
       relations: [
         'distribuicao',
+        'distribuicao.teto',
         'distribuicao.diretoria',
         'ome',
         'ome.diretoria',
@@ -309,7 +308,6 @@ export class EventoService {
       evento.homologado_por = user;
     }
 
-    // ✅ Des-homologar: limpa os campos de homologação
     if (novoStatus === StatusEvento.CRIADO) {
       evento.homologado_em = null;
       evento.homologado_por = null;
@@ -325,29 +323,30 @@ export class EventoService {
       evento.pago_por = user;
     }
 
-    // ✅ REMOVIDO: evento.user = user
-    // O criador do evento nunca muda após a criação
-
     await this.eventoRepo.save(evento);
     evento.updated_at = agora;
     return new ReturnEventoDto(evento);
   }
 
   private async getResumoDistribuicao(distribuicaoId: number) {
-    const result = await this.eventoRepo
-      .createQueryBuilder('e')
-      .select('COALESCE(SUM(e.qtd_of_evento), 0)', 'soma_of_evento')
-      .addSelect('COALESCE(SUM(e.qtd_prc_evento), 0)', 'soma_prc_evento')
-      .where('e.distribuicao.id = :id', { id: distribuicaoId })
+    const result = await this.distribuicaoRepo
+      .createQueryBuilder('dist')
+      .select('dist.qtd_dist_of', 'limite_of')
+      .addSelect('dist.qtd_dist_prc', 'limite_prc')
+      .addSelect('COALESCE(SUM(ev.qtd_of_evento), 0)', 'soma_of_evento')
+      .addSelect('COALESCE(SUM(ev.qtd_prc_evento), 0)', 'soma_prc_evento')
+      .leftJoin('dist.eventos', 'ev')
+      .where('dist.id = :id', { id: distribuicaoId })
+      .groupBy('dist.id')
       .getRawOne();
 
-    const dist = await this.distribuicaoRepo.findOneBy({ id: distribuicaoId });
+    if (!result) throw new NotFoundException('Distribuição não encontrada');
 
     return {
       soma_of_evento: Number(result.soma_of_evento),
       soma_prc_evento: Number(result.soma_prc_evento),
-      limite_of_distribuicao: Number(dist!.qtd_dist_of),
-      limite_prc_distribuicao: Number(dist!.qtd_dist_prc),
+      limite_of_distribuicao: Number(result.limite_of),
+      limite_prc_distribuicao: Number(result.limite_prc),
     };
   }
 
@@ -355,21 +354,24 @@ export class EventoService {
     distribuicaoId: number,
     eventoId: number,
   ) {
-    const result = await this.eventoRepo
-      .createQueryBuilder('e')
-      .select('COALESCE(SUM(e.qtd_of_evento), 0)', 'soma_of_evento')
-      .addSelect('COALESCE(SUM(e.qtd_prc_evento), 0)', 'soma_prc_evento')
-      .where('e.distribuicao.id = :id', { id: distribuicaoId })
-      .andWhere('e.id != :eventoId', { eventoId })
+    const result = await this.distribuicaoRepo
+      .createQueryBuilder('dist')
+      .select('dist.qtd_dist_of', 'limite_of')
+      .addSelect('dist.qtd_dist_prc', 'limite_prc')
+      .addSelect('COALESCE(SUM(ev.qtd_of_evento), 0)', 'soma_of_evento')
+      .addSelect('COALESCE(SUM(ev.qtd_prc_evento), 0)', 'soma_prc_evento')
+      .leftJoin('dist.eventos', 'ev', 'ev.id != :eventoId', { eventoId })
+      .where('dist.id = :id', { id: distribuicaoId })
+      .groupBy('dist.id')
       .getRawOne();
 
-    const dist = await this.distribuicaoRepo.findOneBy({ id: distribuicaoId });
+    if (!result) throw new NotFoundException('Distribuição não encontrada');
 
     return {
       soma_of_evento: Number(result.soma_of_evento),
       soma_prc_evento: Number(result.soma_prc_evento),
-      limite_of_distribuicao: Number(dist!.qtd_dist_of),
-      limite_prc_distribuicao: Number(dist!.qtd_dist_prc),
+      limite_of_distribuicao: Number(result.limite_of),
+      limite_prc_distribuicao: Number(result.limite_prc),
     };
   }
 
@@ -377,7 +379,6 @@ export class EventoService {
     evento: Evento,
     userToken: UserEntity,
   ) {
-    // MASTER e TECNICO podem tudo
     if (
       userToken.typeUser === UserType.MASTER ||
       userToken.typeUser === UserType.TECNICO
@@ -385,10 +386,8 @@ export class EventoService {
       return;
     }
 
-    // Só diretor precisa validar
     if (userToken.typeUser === UserType.DIRETOR) {
       const user = await this.getUserCompleto(userToken.id);
-
       const diretoriaEvento = evento.distribuicao.diretoria.id;
       const diretoriaUser = user.ome!.diretoria!.id;
 
@@ -414,7 +413,6 @@ export class EventoService {
 
     if (user.typeUser === UserType.DIRETOR) {
       const userCompleto = await this.getUserCompleto(user.id);
-
       if (distribuicao.diretoria.id !== userCompleto.ome!.diretoria!.id) {
         throw new BadRequestException(
           'Você não pode criar eventos em distribuições de outra diretoria',
@@ -454,7 +452,7 @@ export class EventoService {
     return new ReturnEventoDto(saved);
   }
 
-  // ─── Método auxiliar para buscar totalCotas por tipo_escala ────────────────────
+  // ✅ tipo_escala lido da coluna snapshot — sem join com dadosSgp
   private async getTotalCotasPorTipo(eventoId: number) {
     const result = await this.escalaRepo
       .createQueryBuilder('e')
@@ -478,10 +476,9 @@ export class EventoService {
     const qb = this.eventoRepo
       .createQueryBuilder('e')
       .leftJoinAndSelect('e.distribuicao', 'd')
+      .leftJoinAndSelect('d.teto', 't')
       .leftJoinAndSelect('e.ome', 'o')
       .leftJoinAndSelect('o.diretoria', 'dir')
-
-      // 👇 FALTAVA ISSO
       .leftJoinAndSelect('e.user', 'u')
       .leftJoinAndSelect('u.ome', 'uome')
       .leftJoinAndSelect('uome.diretoria', 'udir');
@@ -491,16 +488,35 @@ export class EventoService {
     }
 
     const eventos = await qb.getMany();
+    if (!eventos.length) return [];
 
-    // Enriquecer cada evento com totalCotas por tipo_escala
-    const eventosComCotas = await Promise.all(
-      eventos.map(async (e) => {
-        const cotasPorTipo = await this.getTotalCotasPorTipo(e.id);
-        return new ReturnEventoComTotalCotasDto(e, cotasPorTipo);
-      }),
+    const eventoIds = eventos.map((e) => e.id);
+
+    // ✅ tipo_escala lido da coluna snapshot — sem join com dadosSgp
+    const todasCotas = await this.escalaRepo
+      .createQueryBuilder('esc')
+      .select('op.evento_id', 'eventoId')
+      .addSelect('esc.tipo_escala', 'tipo_escala')
+      .addSelect('COALESCE(SUM(esc.cota_escala), 0)', 'totalCotas')
+      .innerJoin('esc.operacao', 'op')
+      .where('op.evento_id IN (:...ids)', { ids: eventoIds })
+      .groupBy('op.evento_id')
+      .addGroupBy('esc.tipo_escala')
+      .getRawMany();
+
+    const cotasMap = new Map<number, TotalCotasPorTipo[]>();
+    for (const row of todasCotas) {
+      const id = Number(row.eventoId);
+      if (!cotasMap.has(id)) cotasMap.set(id, []);
+      cotasMap.get(id)!.push({
+        tipo_escala: row.tipo_escala,
+        totalCotas: Number(row.totalCotas),
+      });
+    }
+
+    return eventos.map(
+      (e) => new ReturnEventoComTotalCotasDto(e, cotasMap.get(e.id) ?? []),
     );
-
-    return eventosComCotas;
   }
 
   async findOne(id: number): Promise<ReturnEventoDto> {
@@ -512,17 +528,14 @@ export class EventoService {
     const evento = await this.findOneEntity(id);
     this.validarPermissaoDiretoria(evento, user);
 
-    // 1) Descobrir quais serão os NOVOS valores (sem alterar o objeto ainda)
     const novoOf = dto.qtd_of_evento ?? evento.qtd_of_evento;
     const novoPrc = dto.qtd_prc_evento ?? evento.qtd_prc_evento;
 
-    // 2) Buscar o resumo da distribuição DESCONSIDERANDO esse evento
     const resumo = await this.getResumoDistribuicaoParaUpdate(
       evento.distribuicao.id,
       id,
     );
 
-    // 3) Validar com base nos novos valores
     if (resumo.soma_of_evento + novoOf > resumo.limite_of_distribuicao) {
       throw new BadRequestException('OF ultrapassa limite da distribuição');
     }
@@ -531,23 +544,16 @@ export class EventoService {
       throw new BadRequestException('PRC ultrapassa limite da distribuição');
     }
 
-    // 4) Só agora aplicar as alterações no objeto
     if (dto.ome_id) {
       const ome = await this.omeRepo.findOneBy({ id: dto.ome_id });
       evento.ome = ome!;
     }
 
-    if (dto.qtd_of_evento !== undefined) {
+    if (dto.qtd_of_evento !== undefined)
       evento.qtd_of_evento = dto.qtd_of_evento;
-    }
-
-    if (dto.qtd_prc_evento !== undefined) {
+    if (dto.qtd_prc_evento !== undefined)
       evento.qtd_prc_evento = dto.qtd_prc_evento;
-    }
-
-    if (dto.nome_evento !== undefined) {
-      evento.nome_evento = dto.nome_evento;
-    }
+    if (dto.nome_evento !== undefined) evento.nome_evento = dto.nome_evento;
 
     await this.eventoRepo.save(evento);
     return this.findOne(id);
@@ -557,7 +563,6 @@ export class EventoService {
     const evento = await this.findOneEntity(id);
     this.validarPermissaoDiretoria(evento, user);
 
-    // ✅ impede exclusão se houver operações vinculadas
     const qtdOperacoes = await this.operacaoRepo.count({
       where: { evento: { id } },
     });

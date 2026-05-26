@@ -13,9 +13,9 @@ export class CreateDadossgpTable1775481824160 implements MigrationInterface {
           },
           { name: 'matsgp', type: 'varchar', isNullable: false },
           { name: 'pgsgp', type: 'varchar', isNullable: false },
-          { name: 'ngsgp', type: 'varchar', isNullable: false },
+          { name: 'nomeguerrasgp', type: 'varchar', isNullable: false },
           { name: 'nomecompletosgp', type: 'varchar', isNullable: false },
-          { name: 'omesgp', type: 'varchar', isNullable: true },
+          { name: 'nomeomesgp', type: 'varchar', isNullable: true },
           { name: 'tiposgp', type: 'varchar', length: '1', isNullable: false },
 
           {
@@ -50,13 +50,15 @@ export class CreateDadossgpTable1775481824160 implements MigrationInterface {
 
     // ✅ índice para busca por nome de guerra
     await queryRunner.query(
-      `CREATE INDEX "IDX_dadossgp_ngsgp" ON "dadossgp" ("ngsgp")`,
+      `CREATE INDEX "IDX_dadossgp_nomeguerrasgp" ON "dadossgp" ("nomeguerrasgp")`,
     );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_dadossgp_matsgp"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_dadossgp_ngsgp"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_dadossgp_nomeguerrasgp"`,
+    );
     await queryRunner.dropTable('dadossgp');
   }
 }

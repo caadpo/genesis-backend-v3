@@ -16,6 +16,7 @@ import { Roles } from 'src/decorators/roles.decorator';
 import { UserType } from 'src/user/enum/user-type.enum';
 import { TetoService } from './teto.service';
 import { Teto } from './entities/teto.entity';
+import { ReturnTetoDto } from './dtos/return-teto.dto';
 import { CreateTetoDto } from './dtos/create-teto.dto';
 import { UpdateTetoDto } from './dtos/update-teto.dto';
 
@@ -25,7 +26,7 @@ export class TetosController {
   constructor(private readonly tetoService: TetoService) {}
 
   @Post()
-  @Roles(UserType.MASTER, UserType.TECNICO)
+  @Roles(UserType.MASTER)
   create(@Body() dto: CreateTetoDto): Promise<Teto> {
     return this.tetoService.create(dto);
   }
@@ -42,7 +43,7 @@ export class TetosController {
   findPjes(
     @Query('mes') mes: number,
     @Query('ano') ano: number,
-  ): Promise<Teto[]> {
+  ): Promise<ReturnTetoDto[]> {
     return this.tetoService.findPjesPorMes(Number(mes), Number(ano));
   }
 
@@ -57,17 +58,17 @@ export class TetosController {
     UserType.TECNICO,
     UserType.MASTER,
   )
-  findDiarias(): Promise<Teto[]> {
+  findDiarias(): Promise<ReturnTetoDto[]> {
     return this.tetoService.findDiariasAbertas();
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number): Promise<Teto> {
+  findOne(@Param('id', ParseIntPipe) id: number): Promise<ReturnTetoDto> {
     return this.tetoService.findOne(id);
   }
 
   @Patch(':id')
-  @Roles(UserType.MASTER, UserType.TECNICO)
+  @Roles(UserType.MASTER)
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTetoDto,
@@ -77,13 +78,13 @@ export class TetosController {
 
   // 🔒 ENCERRAR FOLHA
   @Patch(':id/encerrar')
-  @Roles(UserType.MASTER, UserType.TECNICO)
+  @Roles(UserType.MASTER)
   encerrar(@Param('id', ParseIntPipe) id: number): Promise<Teto> {
     return this.tetoService.encerrar(id);
   }
 
   @Delete(':id')
-  @Roles(UserType.MASTER, UserType.TECNICO)
+  @Roles(UserType.MASTER)
   remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
     return this.tetoService.remove(id);
   }

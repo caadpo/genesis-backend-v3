@@ -39,33 +39,29 @@ export class PagamentoService {
     });
     if (!evento) throw new NotFoundException('Evento não encontrado');
 
-    // ✅ Mesma query do resumo — agrupa cotas por usuário
     const rows = await this.escalaRepo
       .createQueryBuilder('e')
       .select('e.usuario_id', 'usuarioId')
-      .addSelect('e.mat', 'mat')
-      .addSelect('e.pg_escala', 'pg')
-      .addSelect('e.nome_escala', 'nome')
-      .addSelect('e.nomeome_escala', 'nomeOme')
+      .addSelect('e.nomecompleto_escala', 'nomeCompleto')
+      .addSelect('e.nomeome_escala', 'nomeOme') // ← estava faltando
       .addSelect('e.cpf_escala', 'cpf')
       .addSelect('e.tipo_escala', 'tipo')
-      .addSelect('e.banco_escala', 'banco')
-      .addSelect('e.agencia_escala', 'agencia')
-      .addSelect('e.conta_escala', 'conta')
+      .addSelect('c.banco', 'banco') // ← via join, não e.banco_escala
+      .addSelect('c.agencia', 'agencia') // ← via join
+      .addSelect('c.conta', 'conta') // ← via join
       .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'totalCotas')
       .innerJoin('e.operacao', 'op')
       .innerJoin('op.evento', 'ev')
+      .leftJoin('e.conta', 'c') // ← join com a tabela conta
       .where('ev.id = :eventoId', { eventoId })
       .groupBy('e.usuario_id')
-      .addGroupBy('e.mat')
-      .addGroupBy('e.pg_escala')
-      .addGroupBy('e.nome_escala')
+      .addGroupBy('e.nomecompleto_escala')
       .addGroupBy('e.nomeome_escala')
       .addGroupBy('e.cpf_escala')
       .addGroupBy('e.tipo_escala')
-      .addGroupBy('e.banco_escala')
-      .addGroupBy('e.agencia_escala')
-      .addGroupBy('e.conta_escala')
+      .addGroupBy('c.banco')
+      .addGroupBy('c.agencia')
+      .addGroupBy('c.conta')
       .getRawMany();
 
     if (!rows.length) {
@@ -78,14 +74,12 @@ export class PagamentoService {
     const sistema = teto?.sistema ?? '';
     const nome_verba = teto?.nome_verba ?? '';
 
-    // ✅ Cria ou atualiza os registros de pagamento
     const pagamentos: PagamentoEntity[] = [];
 
     for (const r of rows) {
       const valorCota = VALOR_COTA[r.tipo] ?? 0;
       const totalCotas = Number(r.totalCotas);
 
-      // upsert por eventoId + usuarioId
       let pagamento = await this.repo.findOne({
         where: { eventoId, usuarioId: Number(r.usuarioId) },
       });
@@ -99,16 +93,13 @@ export class PagamentoService {
         });
       }
 
-      // ✅ Snapshot e totais
-      pagamento.mat = Number(r.mat);
-      pagamento.pg_pagamento = r.pg;
-      pagamento.nome_pagamento = r.nome;
-      pagamento.nomeome_pagamento = r.nomeOme;
-      pagamento.cpf_pagamento = r.cpf;
-      pagamento.tipo_pagamento = r.tipo;
-      pagamento.banco_pagamento = r.banco;
-      pagamento.agencia_pagamento = r.agencia;
-      pagamento.conta_pagamento = r.conta;
+      pagamento.nome_pagamento = r.nomeCompleto ?? '';
+      pagamento.nomeome_pagamento = r.nomeOme ?? '';
+      pagamento.cpf_pagamento = r.cpf ?? '';
+      pagamento.tipo_pagamento = r.tipo ?? '';
+      pagamento.banco_pagamento = r.banco ?? '';
+      pagamento.agencia_pagamento = r.agencia ?? '';
+      pagamento.conta_pagamento = r.conta ?? '';
       pagamento.sistema = sistema;
       pagamento.nome_verba = nome_verba;
       pagamento.total_cotas = totalCotas;
@@ -129,5 +120,39 @@ export class PagamentoService {
       order: { nomeome_pagamento: 'ASC', nome_pagamento: 'ASC' },
     });
     return pagamentos.map((p) => new ReturnPagamentoDto(p));
+  }
+
+  // ─── Listar todos os pagamentos ─────────────────────────────────────────────
+  async findAll(): Promise<ReturnPagamentoDto[]> {
+    const pagamentos = await this.repo.find({
+      relations: {
+        evento: {
+          ome: true,
+        },
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+    return pagamentos.map((p) => new ReturnPagamentoDto(p));
+  }
+
+  // ─── Buscar um pagamento por ID ────────────────────────────────────────────
+  async findOne(id: number): Promise<ReturnPagamentoDto> {
+    const pagamento = await this.repo.findOne({
+      where: { id },
+      relations: {
+        evento: {
+          ome: true,
+        },
+      },
+    });
+
+    if (!pagamento) {
+      throw new NotFoundException('Pagamento não encontrado');
+    }
+
+    return new ReturnPagamentoDto(pagamento);
   }
 }
