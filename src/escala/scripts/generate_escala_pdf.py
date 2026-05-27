@@ -38,7 +38,12 @@ from reportlab.lib.enums import (
 
 VERDE_CABEC = colors.HexColor('#08462e')   # Cor principal do cabeçalho
 BRANCO      = colors.white                 # Texto branco
-CINZA_LINHA = colors.HexColor('#F1F8E9')  # Fundo alternado das linhas
+CINZA_LINHA = colors.Color(
+    241/255,
+    248/255,
+    233/255,
+    alpha=0.45
+)
 PRETO       = colors.black                 # Texto preto
 CINZA_BORDA = colors.HexColor('#BDBDBD')  # Cor das bordas
 
@@ -109,7 +114,7 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
     s_sect = ParagraphStyle(
         's',
         parent=styles['Normal'],
-        fontSize=10,
+        fontSize=8,
         fontName='Helvetica-Bold',
         textColor=VERDE_CABEC
     )
@@ -142,11 +147,47 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
 
         base_dir = os.path.dirname(os.path.abspath(__file__))
 
+        # ---------------------------------------------------------------------
+        # MARCA D'ÁGUA
+        # ---------------------------------------------------------------------
+
+        watermark = os.path.join(base_dir, 'logo_dpo.png')
+
+                # ---------------------------------------------------------------------
+        # DESENHA MARCA D'ÁGUA
+        # ---------------------------------------------------------------------
+
+        if os.path.exists(watermark):
+
+            # deixa transparente
+            canvas.setFillAlpha(0.08)
+
+            # tamanho da marca
+            wm_width = 13 * cm
+            wm_height = 13 * cm
+
+            # centraliza na página
+            x = (PAGE_W - wm_width) / 2
+            y = (PAGE_H - wm_height) / 2
+
+            canvas.drawImage(
+                watermark,
+                x,
+                y,
+                width=wm_width,
+                height=wm_height,
+                preserveAspectRatio=True,
+                mask='auto'
+            )
+
+            # volta transparência normal
+            canvas.setFillAlpha(1)
+
         logo_l = os.path.join(base_dir, 'logo_pmpe.jpg')
         logo_r = os.path.join(base_dir, 'logo_pe.jpg')
 
         # Tamanho das logos
-        logo_h = logo_w = 2.0 * cm
+        logo_h = logo_w = 1.5 * cm
 
         # ---------------------------------------------------------------------
         # LOGO ESQUERDA
@@ -182,14 +223,14 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
         cx = PAGE_W / 2
 
         # Posição vertical inicial
-        y = PAGE_H - MARGIN - 0.35 * cm
+        y = PAGE_H - MARGIN - 0.25 * cm
 
         # ---------------------------------------------------------------------
         # TEXOS DO CABEÇALHO
         # ---------------------------------------------------------------------
         # ALTERE AQUI os textos institucionais
 
-        canvas.setFont('Helvetica-Bold', 10)
+        canvas.setFont('Helvetica-Bold', 8)
         canvas.setFillColor(PRETO)
 
         canvas.drawCentredString(
@@ -200,7 +241,7 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
 
         y -= 0.45 * cm
 
-        canvas.setFont('Helvetica-Bold', 9)
+        canvas.setFont('Helvetica-Bold', 8)
 
         canvas.drawCentredString(
             cx,
@@ -259,20 +300,71 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
         leftMargin=MARGIN,
         rightMargin=MARGIN,
 
-        topMargin=3.8 * cm,
-        bottomMargin=1.8 * cm,
+        topMargin=2.8 * cm,
+        bottomMargin=1 * cm,
     )
 
-    # Lista que armazenará os componentes do PDF
+       # Lista que armazenará os componentes do PDF
     story = []
 
     # =========================================================================
     # TÍTULO PRINCIPAL
     # =========================================================================
+    # ESQUERDA  -> título da operação
+    # DIREITA   -> texto "Gênesis"
+    # =========================================================================
 
-    story.append(
-        Paragraph(f"{sistema}_{nome_ome} | {nome_evento}, {nome_op} - COP:{cod_op}", s_sect)
+    # largura utilizável da página
+    usable_w = PAGE_W - 2 * MARGIN
+
+    titulo_esquerda = Paragraph(
+        f"{sistema}_{nome_ome} | {nome_evento}, {nome_op} - COP:{cod_op}",
+        s_sect
     )
+
+    # -------------------------------------------------------------------------
+    # TEXTO DA DIREITA
+    # -------------------------------------------------------------------------
+
+    titulo_direita = Paragraph(
+        "<b>Sistema Gênesis</b>",
+        ParagraphStyle(
+            'genesis_style',
+            parent=styles['Normal'],
+            alignment=TA_RIGHT,
+            fontSize=8,
+            fontName='Helvetica-Bold',
+            textColor=VERDE_CABEC
+        )
+    )
+
+    # -------------------------------------------------------------------------
+    # TABELA DO CABEÇALHO
+    # -------------------------------------------------------------------------
+
+    header_table = Table(
+        [[titulo_esquerda, titulo_direita]],
+        colWidths=[
+            usable_w * 0.85,
+            usable_w * 0.15
+        ]
+    )
+
+    # -------------------------------------------------------------------------
+    # ESTILO
+    # -------------------------------------------------------------------------
+
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+
+    # adiciona no PDF
+    story.append(header_table)
 
     story.append(
         Spacer(1, 0.3 * cm)
@@ -281,7 +373,6 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
     # =========================================================================
     # CABEÇALHOS DA TABELA
     # =========================================================================
-    # ALTERE AQUI os nomes das colunas
 
     col_headers = [
         '#',
@@ -455,16 +546,16 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
 
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-        ('TOPPADDING', (0, 0), (-1, 0), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 3),
+        ('TOPPADDING', (0, 0), (-1, 0), 3),
 
         # CORPO DA TABELA
         ('FONTSIZE', (0, 1), (-1, -1), 7.5),
 
         ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
 
-        ('TOPPADDING', (0, 1), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
+        ('TOPPADDING', (0, 1), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
 
         # GRID
         ('GRID', (0, 0), (-1, -1), 0.4, CINZA_BORDA),
