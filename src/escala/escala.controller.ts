@@ -20,6 +20,9 @@ import { Roles } from 'src/decorators/roles.decorator';
 import { UserType } from 'src/user/enum/user-type.enum';
 import { EscalaService } from './escala.service';
 
+import { Res } from '@nestjs/common';
+import type { Response } from 'express';
+
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('escala')
 export class EscalaController {
@@ -64,6 +67,42 @@ export class EscalaController {
   )
   findAll(@Query('operacaoId') operacaoId?: string) {
     return this.service.findByOperacao(Number(operacaoId));
+  }
+
+  @Get('pdf')
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.AUXILIAR,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.COMUN,
+  )
+  async downloadPdf(
+    @Query('operacaoId') operacaoId: string,
+    @Request() req: any,
+    @Res() res: Response,
+  ): Promise<void> {
+    if (!operacaoId) {
+      throw new BadRequestException('Informe o operacaoId');
+    }
+
+    const matUsuario: string =
+      req.user?.mat ?? req.user?.id?.toString() ?? 'N/A';
+    const { buffer, cod_op } = await this.service.generatePdf(
+      Number(operacaoId),
+      matUsuario,
+    );
+
+    const filename = `COP_${cod_op}.pdf`;
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+
+    res.end(buffer);
   }
 
   @Get('minhas')

@@ -18,6 +18,14 @@ import { ViaturaEntity } from 'src/viatura/entities/viatura.entity';
 import { DadosSgpEntity } from 'src/dadossgp/entities/dadossgp.entity';
 import { ReturnEscalaOperacaoDto } from './dtos/return-escala-operacao.dto';
 
+import * as fs from 'fs';
+import * as path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import { tmpdir } from 'os';
+
+const execFileAsync = promisify(execFile);
+
 export interface CotasPorTipo {
   tipo_escala: string;
   totalCotas: number;
@@ -493,6 +501,8 @@ export class EscalaService {
       .leftJoinAndSelect('e.viatura', 'viatura')
       .leftJoinAndSelect('e.usuario', 'usuario')
       .leftJoinAndSelect('e.conta', 'conta')
+      .leftJoinAndSelect('e.operacao', 'operacao') // ← adicionar
+      .leftJoinAndSelect('operacao.evento', 'evento') // ← adicionar
       .where('e.operacao_id = :operacaoId', { operacaoId })
       .orderBy('e.data_inicio', 'ASC')
       .addOrderBy('e.hora_inicio', 'ASC')
@@ -500,6 +510,42 @@ export class EscalaService {
 
     const dtos = escalas.map((e) => new ReturnEscalaDto(e));
     return new ReturnEscalaOperacaoDto(dtos);
+  }
+
+  async generatePdf(
+    operacaoId: number,
+    matUsuario: string,
+  ): Promise<{ buffer: Buffer; cod_op: string }> {
+    const [dto, operacao] = await Promise.all([
+      this.findByOperacao(operacaoId),
+      this.operacaoRepo.findOneBy({ id: operacaoId }), // ← busca direta
+    ]);
+
+    const payload = JSON.stringify({ ...dto, operacaoId });
+
+    const SCRIPT_PATH = path.resolve(
+      process.cwd(),
+      'src',
+      'escala',
+      'scripts',
+      'generate_escala_pdf.py',
+    );
+
+    const cod_op = operacao?.cod_op ?? `op${operacaoId}`;
+    const outputPath = path.join(tmpdir(), `COP_${cod_op}.pdf`);
+
+    try {
+      await execFileAsync('python', [
+        SCRIPT_PATH,
+        payload,
+        matUsuario,
+        outputPath,
+      ]);
+      const buffer = fs.readFileSync(outputPath);
+      return { buffer, cod_op }; // ← retorna os dois
+    } finally {
+      if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+    }
   }
 
   // ── Find one ────────────────────────────────────────────────────────────────

@@ -39,6 +39,7 @@ export class ReturnEscalaDto {
   viaturaId?: number | null;
   viatura?: ReturnViaturaResumoDto | null;
   nomeOperacao?: string;
+  cod_op?: string;
   nomeEvento?: string;
   nomeOme?: string;
   status_teto?: string;
@@ -77,6 +78,7 @@ export class ReturnEscalaDto {
     this.operacaoId = e.operacao?.id;
     this.viaturaId = e.viaturaId ?? null;
     this.nomeOperacao = e.operacao?.nome_operacao;
+    this.cod_op = e.operacao?.cod_op;
     this.nomeEvento = e.operacao?.evento?.nome_evento;
     this.nomeOme = e.operacao?.evento?.ome?.nomeOme;
     this.viatura = e.viatura ? new ReturnViaturaResumoDto(e.viatura) : null;
