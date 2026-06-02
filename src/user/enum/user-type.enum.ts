@@ -5,6 +5,7 @@ export enum UserType {
   ESTRATEGICO = 4, //ACESSA PJES E DIARIA (visualização para planejar distribuição)
   FINANCEIRO = 5, //ACESSA DIARIA (visualização)
   PD = 6, //ACESSA DIARIA (Realiza os lançamentos)
+  GESTOR_VERBA = 7,
   TECNICO = 9, //ACESSA PJES E DIARIA (Distribui pra diretorias, cria eventos e realiza lançam)
   MASTER = 10,
 }

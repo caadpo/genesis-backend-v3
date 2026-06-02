@@ -55,6 +55,6 @@ export class OperacaoController {
   @Delete(':id')
   @Roles(UserType.AUXILIAR, UserType.TECNICO, UserType.MASTER)
   remove(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
-    return this.service.remove(id, req.user); // ✅ passa o usuário autenticado
+    return this.service.remove(id, req.user);
   }
 }

@@ -19,6 +19,7 @@ import { Teto } from './entities/teto.entity';
 import { ReturnTetoDto } from './dtos/return-teto.dto';
 import { CreateTetoDto } from './dtos/create-teto.dto';
 import { UpdateTetoDto } from './dtos/update-teto.dto';
+import { StatusTeto } from './enum/teto-type.enum';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('tetos')
@@ -31,10 +32,10 @@ export class TetosController {
     return this.tetoService.create(dto);
   }
 
-  // 🔵 PJES
   @Get('pjes')
   @Roles(
     UserType.AUXILIAR,
+    UserType.GESTOR_VERBA,
     UserType.DIRETOR,
     UserType.ESTRATEGICO,
     UserType.TECNICO,
@@ -58,8 +59,10 @@ export class TetosController {
     UserType.TECNICO,
     UserType.MASTER,
   )
-  findDiarias(): Promise<ReturnTetoDto[]> {
-    return this.tetoService.findDiariasAbertas();
+  findDiarias(@Query('status') status?: string): Promise<ReturnTetoDto[]> {
+    const statusFiltro =
+      status === 'ENCERRADO' ? StatusTeto.ENCERRADO : StatusTeto.ABERTO;
+    return this.tetoService.findDiarias(statusFiltro);
   }
 
   @Get(':id')

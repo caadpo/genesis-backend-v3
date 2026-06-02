@@ -17,30 +17,128 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
      * 🔹 DIRETORIAS
      */
     await queryRunner.query(`
-      INSERT INTO diretoria (nomediretoria)
-      VALUES
-        ('DPO'),
-        ('DIM'),
-        ('DIRESP'),
-        ('DINTER I'),
-        ('DINTER II');
-    `);
+        INSERT INTO diretoria (nomediretoria)
+        VALUES
+          ('DPO'),
+          ('DIM'),
+          ('DIRESP'),
+          ('DINTER I'),
+          ('DINTER II'),
+          ('DASDH'),
+          ('TJPE');         
+      `);
 
     /**
      * 🔹 OMEs
      */
     await queryRunner.query(`
-      INSERT INTO ome (nomeome, diretoriaid)
-      SELECT 'DPO SEDE',  id FROM diretoria WHERE nomediretoria = 'DPO'
-      UNION ALL
-      SELECT '1º BPM',   id FROM diretoria WHERE nomediretoria = 'DIM'
-      UNION ALL
-      SELECT 'BPCHOQUE', id FROM diretoria WHERE nomediretoria = 'DIRESP'
-      UNION ALL
-      SELECT '4º BPM',   id FROM diretoria WHERE nomediretoria = 'DINTER I'
-      UNION ALL
-      SELECT '5º BPM',   id FROM diretoria WHERE nomediretoria = 'DINTER II';
-    `);
+        INSERT INTO ome (nomeome, diretoriaid)
+
+        -- DPO
+        SELECT 'DPO SEDE', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'ADAGRO', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'SEFAZ', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'CREED', id FROM diretoria WHERE nomediretoria = 'DPO'
+
+        -- DIM
+        UNION ALL
+        SELECT '1º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
+        UNION ALL
+        SELECT '6º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
+        UNION ALL
+        SELECT '11º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
+        UNION ALL
+        SELECT '12º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
+        UNION ALL
+        SELECT '13º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
+        UNION ALL
+        SELECT '16º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
+        UNION ALL
+        SELECT '17º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
+        UNION ALL
+        SELECT '18º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
+        UNION ALL
+        SELECT '19º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
+        UNION ALL
+        SELECT '20º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
+        UNION ALL
+        SELECT '25º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
+        UNION ALL
+        SELECT '26º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
+
+        -- DIRESP
+        UNION ALL
+        SELECT 'DIRESP SEDE', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BOPE', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BEPI', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BPRP', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BPTRAN', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BPA', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BPTUR', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'CIPMOTO', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'CIPCAES', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BPRV', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT '1º BIESP', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT '2º BIESP', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+
+        -- DINTER I
+        UNION ALL
+        SELECT 'DINTER I SEDE', id FROM diretoria WHERE nomediretoria = 'DINTER I'
+        UNION ALL
+        SELECT '2º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
+        UNION ALL
+        SELECT '4º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
+        UNION ALL
+        SELECT '9º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
+        UNION ALL
+        SELECT '10º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
+        UNION ALL
+        SELECT '15º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
+        UNION ALL
+        SELECT '21º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
+        UNION ALL
+        SELECT '22º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
+        UNION ALL
+        SELECT '24º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
+        UNION ALL
+        SELECT '27º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
+
+        -- DINTER II
+        UNION ALL
+        SELECT 'DINTER II SEDE', id FROM diretoria WHERE nomediretoria = 'DINTER II'
+        UNION ALL
+        SELECT '3º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER II'
+        UNION ALL
+        SELECT '5º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER II'
+        UNION ALL
+        SELECT '7º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER II'
+        UNION ALL
+        SELECT '8º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER II'
+        UNION ALL
+        SELECT '23º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER II'
+
+         -- DASDH
+        UNION ALL
+        SELECT 'DASDH SEDE', id FROM diretoria WHERE nomediretoria = 'DASDH'
+        
+         -- TJPE
+        UNION ALL
+        SELECT 'TJPE SEDE', id FROM diretoria WHERE nomediretoria = 'TJPE';
+        `);
 
     /**
      * 🔹 USER MASTER

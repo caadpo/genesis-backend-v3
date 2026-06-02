@@ -257,6 +257,24 @@ export class OperacaoService {
     const novoOf = dto.qtd_oficiais_oper ?? operacao.qtd_oficiais_oper;
     const novoPrc = dto.qtd_pracas_oper ?? operacao.qtd_pracas_oper;
 
+    // ✅ Validação: novas qtds não podem ser menores que cotas já lançadas
+    const cotasPorTipo = await this.getTotalCotasPorTipo(id);
+    const cotasOf =
+      cotasPorTipo.find((c) => c.tipo_escala === 'O')?.totalCotas ?? 0;
+    const cotasPrc =
+      cotasPorTipo.find((c) => c.tipo_escala === 'P')?.totalCotas ?? 0;
+
+    if (novoOf < cotasOf) {
+      throw new BadRequestException(
+        `Qtd. de oficiais (${novoOf}) não pode ser menor que as cotas já escaladas (${cotasOf}).`,
+      );
+    }
+    if (novoPrc < cotasPrc) {
+      throw new BadRequestException(
+        `Qtd. de praças (${novoPrc}) não pode ser menor que as cotas já escaladas (${cotasPrc}).`,
+      );
+    }
+
     let resumo: ReturnOperacaoResumoDto;
 
     if (dto.evento_id && dto.evento_id !== operacao.evento.id) {

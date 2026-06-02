@@ -43,9 +43,17 @@ export class DistribuicaoController {
     );
   }
 
+  @Get(':id/omes')
+  findOmesPorDistribuicao(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+  ) {
+    return this.service.findOmesPorDistribuicao(id, req.user as UserEntity);
+  }
+
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.service.findOne(id);
+  findOne(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.service.findOne(id, req.user as UserEntity);
   }
 
   @Patch(':id')

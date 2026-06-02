@@ -25,6 +25,12 @@ import {
   ReturnEventoComTotalCotasDto,
   TotalCotasPorTipo,
 } from './dtos/return-evento-com-total-cotas.dto';
+import * as path from 'path';
+import * as fs from 'fs';
+import { tmpdir } from 'os';
+import { promisify } from 'util';
+import { execFile } from 'child_process';
+const execFileAsync = promisify(execFile);
 
 @Injectable()
 export class EventoService {
@@ -84,8 +90,8 @@ export class EventoService {
       .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'totalCotas')
       .innerJoin('e.operacao', 'op')
       .innerJoin('op.evento', 'ev')
-      .innerJoin('e.usuario', 'u') // ✅ apenas para phone (não existe no snapshot)
-      .leftJoin('e.conta', 'c') // ✅ left join para dados bancários (nullable)
+      .innerJoin('e.usuario', 'u')
+      .leftJoin('e.conta', 'c')
       .where('ev.id = :eventoId', { eventoId })
       .groupBy('e.usuario_id')
       .addGroupBy('e.mat_escala')
@@ -190,6 +196,40 @@ export class EventoService {
       totalCotasPracas: somaPrc,
       usuarios: usuariosDto,
     };
+  }
+
+  async generatePdf(
+    eventoId: number,
+    matUsuario: string,
+  ): Promise<{ buffer: Buffer; nomeEvento: string }> {
+    const resumo = await this.getResumoEscalas(eventoId);
+
+    const payload = JSON.stringify(resumo);
+
+    const SCRIPT_PATH = path.resolve(
+      process.cwd(),
+      'src',
+      'evento',
+      'scripts',
+      'generate_evento_pdf.py',
+    );
+
+    const nomeEvento = resumo.nome_evento ?? `evento${eventoId}`;
+    const safeName = nomeEvento.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const outputPath = path.join(tmpdir(), `EVENTO_${safeName}.pdf`);
+
+    try {
+      await execFileAsync('python', [
+        SCRIPT_PATH,
+        payload,
+        matUsuario,
+        outputPath,
+      ]);
+      const buffer = fs.readFileSync(outputPath);
+      return { buffer, nomeEvento: safeName };
+    } finally {
+      if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+    }
   }
 
   /**
@@ -472,19 +512,40 @@ export class EventoService {
 
   async findAll(
     distribuicaoId?: number,
+    omeId?: number,
+    user?: UserEntity,
   ): Promise<ReturnEventoComTotalCotasDto[]> {
     const qb = this.eventoRepo
       .createQueryBuilder('e')
       .leftJoinAndSelect('e.distribuicao', 'd')
       .leftJoinAndSelect('d.teto', 't')
+      .leftJoinAndSelect('d.diretoria', 'ddir')
       .leftJoinAndSelect('e.ome', 'o')
       .leftJoinAndSelect('o.diretoria', 'dir')
       .leftJoinAndSelect('e.user', 'u')
       .leftJoinAndSelect('u.ome', 'uome')
       .leftJoinAndSelect('uome.diretoria', 'udir');
 
-    if (distribuicaoId) {
-      qb.where('d.id = :id', { id: distribuicaoId });
+    if (distribuicaoId) qb.where('d.id = :id', { id: distribuicaoId });
+    if (omeId) qb.andWhere('e.ome_id = :omeId', { omeId });
+
+    if (user) {
+      const typeUser = Number(user.typeUser);
+
+      if (typeUser === UserType.DIRETOR || typeUser === UserType.GESTOR_VERBA) {
+        const userCompleto = await this.getUserCompleto(user.id);
+        const diretoriaId = userCompleto.ome!.diretoria!.id;
+
+        if (typeUser === UserType.DIRETOR) {
+          // ✅ Vê eventos das suas OMEs (independente da distribuição)
+          qb.andWhere('dir.id = :diretoriaId', { diretoriaId });
+        }
+
+        if (typeUser === UserType.GESTOR_VERBA) {
+          // ✅ Vê apenas eventos de distribuições da sua diretoria
+          qb.andWhere('ddir.id = :diretoriaId', { diretoriaId });
+        }
+      }
     }
 
     const eventos = await qb.getMany();
@@ -531,6 +592,29 @@ export class EventoService {
     const novoOf = dto.qtd_of_evento ?? evento.qtd_of_evento;
     const novoPrc = dto.qtd_prc_evento ?? evento.qtd_prc_evento;
 
+    // ✅ Impede reduzir qtd abaixo da soma já distribuída nas operações
+    const somaOperacoes = await this.operacaoRepo
+      .createQueryBuilder('op')
+      .select('COALESCE(SUM(op.qtd_oficiais_oper), 0)', 'somaOf')
+      .addSelect('COALESCE(SUM(op.qtd_pracas_oper), 0)', 'somaPrc')
+      .where('op.evento_id = :id', { id })
+      .getRawOne<{ somaOf: string; somaPrc: string }>();
+
+    const somaOf = Number(somaOperacoes?.somaOf ?? 0);
+    const somaPrc = Number(somaOperacoes?.somaPrc ?? 0);
+
+    if (novoOf < somaOf) {
+      throw new BadRequestException(
+        `Qtd. de oficiais (${novoOf}) não pode ser menor que a soma já distribuída nas operações (${somaOf}).`,
+      );
+    }
+    if (novoPrc < somaPrc) {
+      throw new BadRequestException(
+        `Qtd. de praças (${novoPrc}) não pode ser menor que a soma já distribuída nas operações (${somaPrc}).`,
+      );
+    }
+
+    // restante inalterado...
     const resumo = await this.getResumoDistribuicaoParaUpdate(
       evento.distribuicao.id,
       id,

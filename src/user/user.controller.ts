@@ -28,13 +28,13 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  @Roles(UserType.AUXILIAR, UserType.TECNICO, UserType.MASTER)
+  @Roles(UserType.MASTER)
   async createUser(@Body() dto: CreateUserDto): Promise<UserEntity> {
     return this.userService.createUser(dto);
   }
 
   @Get('search')
-  @Roles(UserType.AUXILIAR, UserType.TECNICO, UserType.MASTER)
+  @Roles(UserType.MASTER)
   async searchUser(@Query('q') q: string): Promise<UserSearchDto | null> {
     return this.userService.findByMatOrNomeGuerra(q);
   }
@@ -45,7 +45,7 @@ export class UserController {
   }
 
   @Put(':id')
-  @Roles(UserType.AUXILIAR, UserType.TECNICO, UserType.MASTER)
+  @Roles(UserType.TECNICO, UserType.MASTER)
   async updateUser(
     @Param('id') id: number,
     @Body() dto: UpdateUserDto,
@@ -85,7 +85,7 @@ export class UserController {
   }
 
   @Delete(':id')
-  @Roles(UserType.AUXILIAR, UserType.TECNICO, UserType.MASTER)
+  @Roles(UserType.MASTER)
   async deleteUser(@Param('id') id: number) {
     await this.userService.deleteUser(id);
     return { message: 'Usuário removido com sucesso' };

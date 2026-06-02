@@ -85,7 +85,26 @@ export class TetoService {
         .addSelect('t.status', 'status')
         .addSelect('t.created_at', 'created_at')
         .addSelect('t.updated_at', 'updated_at')
-        // ✅ tipo_escala agora é coluna snapshot na própria tabela escala — sem join com dadosSgp
+
+        // ✅ NOVO: soma das distribuições do teto
+        .addSelect(
+          (subQuery) =>
+            subQuery
+              .select('COALESCE(SUM(d.qtd_dist_of), 0)')
+              .from('distribuicao', 'd')
+              .where('d.teto_id = t.id'),
+          'qtd_dist_of',
+        )
+        .addSelect(
+          (subQuery) =>
+            subQuery
+              .select('COALESCE(SUM(d.qtd_dist_prc), 0)')
+              .from('distribuicao', 'd')
+              .where('d.teto_id = t.id'),
+          'qtd_dist_prc',
+        )
+
+        // já existia: cotas das escalas
         .addSelect(
           (subQuery) =>
             subQuery
@@ -138,10 +157,10 @@ export class TetoService {
   }
 
   // 🟢 DIÁRIAS → NÃO USA DATA, SÓ STATUS
-  async findDiariasAbertas(): Promise<ReturnTetoDto[]> {
+  async findDiarias(status: StatusTeto): Promise<ReturnTetoDto[]> {
     const tetos = await this.buildTetoQuery()
       .where('t.sistema = :sistema', { sistema: Sistema.DIARIAS })
-      .andWhere('t.status = :status', { status: StatusTeto.ABERTO })
+      .andWhere('t.status = :status', { status })
       .orderBy('t.nome_verba', 'ASC')
       .getRawMany();
 

@@ -154,17 +154,23 @@ export class DistribuicaoService {
     });
   }
 
-  // ✅ tipo_escala agora é coluna snapshot na própria tabela escala — sem join com dadosSgp
-  private async getTotalCotasPorTipoDistribuicao(distId: number) {
-    const rows = await this.escalaRepo
+  private async getTotalCotasPorTipoDistribuicao(
+    distId: number,
+    omeId?: number,
+  ) {
+    const qb = this.escalaRepo
       .createQueryBuilder('e')
       .select('e.tipo_escala', 'tipo_escala')
       .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'totalCotas')
       .innerJoin('e.operacao', 'op')
       .innerJoin('op.evento', 'ev')
-      .where('ev.distribuicao_id = :distId', { distId })
-      .groupBy('e.tipo_escala')
-      .getRawMany();
+      .where('ev.distribuicao_id = :distId', { distId });
+
+    if (omeId) {
+      qb.andWhere('op.ome_id = :omeId', { omeId });
+    }
+
+    const rows = await qb.groupBy('e.tipo_escala').getRawMany();
 
     return rows.map((r) => ({
       tipo_escala: r.tipo_escala,
@@ -172,13 +178,95 @@ export class DistribuicaoService {
     }));
   }
 
-  private async getSomaEventosDistribuicao(distId: number) {
-    const result = await this.eventoRepo
+  // distribuicao.service.ts — findOmesPorDistribuicao
+  async findOmesPorDistribuicao(
+    distribuicaoId: number,
+    user: UserEntity,
+  ): Promise<
+    {
+      omeId: number;
+      nomeOme: string;
+      soma_of: number; // qtd destinada (eventos)
+      soma_prc: number;
+      cotas_of: number; // consumo real (escalas)
+      cotas_prc: number;
+    }[]
+  > {
+    const userCompleto = await this.getUserCompleto(user.id);
+    const isAuxiliar = Number(userCompleto.typeUser) === UserType.AUXILIAR;
+
+    // Query 1: soma de qtd_of_evento / qtd_prc_evento por OME
+    const qbEventos = this.eventoRepo
+      .createQueryBuilder('e')
+      .select('o.id', 'omeId')
+      .addSelect('o.nomeOme', 'nomeOme')
+      .addSelect('COALESCE(SUM(e.qtd_of_evento), 0)', 'soma_of')
+      .addSelect('COALESCE(SUM(e.qtd_prc_evento), 0)', 'soma_prc')
+      .innerJoin('e.ome', 'o')
+      .where('e.distribuicao_id = :distribuicaoId', { distribuicaoId });
+
+    if (isAuxiliar) {
+      qbEventos.andWhere('e.ome_id = :omeId', { omeId: userCompleto.ome.id });
+    }
+
+    const rowsEventos = await qbEventos
+      .groupBy('o.id')
+      .addGroupBy('o.nomeOme')
+      .orderBy('o.nomeOme', 'ASC')
+      .getRawMany();
+
+    // Query 2: soma de cota_escala por OME (consumo real)
+    const omeIds = rowsEventos.map((r) => Number(r.omeId));
+    if (!omeIds.length) return [];
+
+    const rowsCotas = await this.escalaRepo
+      .createQueryBuilder('e')
+      .select('op.ome_id', 'omeId')
+      .addSelect('e.tipo_escala', 'tipo')
+      .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'total')
+      .innerJoin('e.operacao', 'op')
+      .innerJoin('op.evento', 'ev')
+      .where('ev.distribuicao_id = :distribuicaoId', { distribuicaoId })
+      .andWhere('op.ome_id IN (:...omeIds)', { omeIds })
+      .groupBy('op.ome_id')
+      .addGroupBy('e.tipo_escala')
+      .getRawMany();
+
+    // Monta mapa omeId → { cotas_of, cotas_prc }
+    const cotasMap = new Map<number, { cotas_of: number; cotas_prc: number }>();
+    for (const r of rowsCotas) {
+      const id = Number(r.omeId);
+      if (!cotasMap.has(id)) cotasMap.set(id, { cotas_of: 0, cotas_prc: 0 });
+      if (r.tipo === 'O') cotasMap.get(id)!.cotas_of = Number(r.total);
+      if (r.tipo === 'P') cotasMap.get(id)!.cotas_prc = Number(r.total);
+    }
+
+    return rowsEventos.map((r) => {
+      const id = Number(r.omeId);
+      const cotas = cotasMap.get(id) ?? { cotas_of: 0, cotas_prc: 0 };
+      return {
+        omeId: id,
+        nomeOme: r.nomeOme,
+        soma_of: Number(r.soma_of),
+        soma_prc: Number(r.soma_prc),
+        cotas_of: cotas.cotas_of,
+        cotas_prc: cotas.cotas_prc,
+      };
+    });
+  }
+
+  private async getSomaEventosDistribuicao(distId: number, omeId?: number) {
+    const qb = this.eventoRepo
       .createQueryBuilder('e')
       .select('COALESCE(SUM(e.qtd_of_evento), 0)', 'soma_of')
       .addSelect('COALESCE(SUM(e.qtd_prc_evento), 0)', 'soma_prc')
-      .where('e.distribuicao_id = :distId', { distId })
-      .getRawOne();
+      .where('e.distribuicao_id = :distId', { distId });
+
+    if (omeId) {
+      qb.andWhere('e.ome_id = :omeId', { omeId });
+    }
+
+    const result = await qb.getRawOne();
 
     return {
       soma_of: Number(result.soma_of),
@@ -201,26 +289,48 @@ export class DistribuicaoService {
       qb.andWhere('t.id = :tetoId', { tetoId });
     }
 
-    if (userCompleto.typeUser === UserType.DIRETOR) {
+    if (userCompleto.typeUser === UserType.GESTOR_VERBA) {
+      // Vê apenas distribuições da sua diretoria
       qb.andWhere('dir.id = :diretoriaId', {
         diretoriaId: userCompleto.ome.diretoria.id,
       });
+    }
+
+    if (userCompleto.typeUser === UserType.DIRETOR) {
+      // ✅ Vê distribuições da sua diretoria OU distribuições que têm eventos para suas OMEs
+      qb.leftJoin('d.eventos', 'ev')
+        .leftJoin('ev.ome', 'ome_ev')
+        .leftJoin('ome_ev.diretoria', 'dir_ome_ev')
+        .andWhere('(dir.id = :diretoriaId OR dir_ome_ev.id = :diretoriaId)', {
+          diretoriaId: userCompleto.ome.diretoria.id,
+        });
     }
 
     if (userCompleto.typeUser === UserType.AUXILIAR) {
-      qb.andWhere('dir.id = :diretoriaId', {
-        diretoriaId: userCompleto.ome.diretoria.id,
-      });
+      // ✅ Vê distribuições da sua diretoria OU distribuições que têm eventos para sua OME
+      qb.leftJoin('d.eventos', 'ev')
+        .leftJoin('ev.ome', 'ome_ev')
+        .andWhere('(dir.id = :diretoriaId OR ome_ev.id = :omeId)', {
+          diretoriaId: userCompleto.ome.diretoria.id,
+          omeId: userCompleto.ome.id,
+        });
     }
 
-    const distribs = await qb.getMany();
+    const distribs = await qb.distinct(true).getMany();
+
+    const isAuxiliar = userCompleto.typeUser === UserType.AUXILIAR;
+    const omeId = isAuxiliar ? userCompleto.ome?.id : undefined;
 
     return Promise.all(
       distribs.map(async (dist) => {
         const cotasPorTipo = await this.getTotalCotasPorTipoDistribuicao(
           dist.id,
+          omeId,
         );
-        const eventosSoma = await this.getSomaEventosDistribuicao(dist.id);
+        const eventosSoma = await this.getSomaEventosDistribuicao(
+          dist.id,
+          omeId,
+        );
 
         return new ReturnDistribuicaoComTotalCotasDto(
           dist,
@@ -241,7 +351,10 @@ export class DistribuicaoService {
     });
   }
 
-  async findOne(id: number): Promise<ReturnDistribuicaoComTotalCotasDto> {
+  async findOne(
+    id: number,
+    user?: UserEntity,
+  ): Promise<ReturnDistribuicaoComTotalCotasDto> {
     const dist = await this.distribuicaoRepo.findOne({
       where: { id },
       relations: ['teto', 'diretoria'],
@@ -249,8 +362,16 @@ export class DistribuicaoService {
 
     if (!dist) throw new NotFoundException('Distribuição não encontrada');
 
-    const cotasPorTipo = await this.getTotalCotasPorTipoDistribuicao(dist.id);
-    const eventosSoma = await this.getSomaEventosDistribuicao(dist.id);
+    const userCompleto = user ? await this.getUserCompleto(user.id) : null;
+    const isAuxiliar =
+      userCompleto && Number(userCompleto.typeUser) === UserType.AUXILIAR;
+    const omeId = isAuxiliar ? userCompleto.ome?.id : undefined;
+
+    const cotasPorTipo = await this.getTotalCotasPorTipoDistribuicao(
+      dist.id,
+      omeId,
+    );
+    const eventosSoma = await this.getSomaEventosDistribuicao(dist.id, omeId);
 
     return new ReturnDistribuicaoComTotalCotasDto(
       dist,
@@ -277,6 +398,21 @@ export class DistribuicaoService {
       const novoOf = dto.qtd_dist_of ?? distribuicao.qtd_dist_of;
       const novoPrc = dto.qtd_dist_prc ?? distribuicao.qtd_dist_prc;
 
+      // ✅ Impede reduzir abaixo da soma já distribuída nos eventos
+      const eventosSoma = await this.getSomaEventosDistribuicao(id);
+
+      if (novoOf < eventosSoma.soma_of) {
+        throw new BadRequestException(
+          `Qtd. de oficiais (${novoOf}) não pode ser menor que a soma já distribuída nos eventos (${eventosSoma.soma_of}).`,
+        );
+      }
+      if (novoPrc < eventosSoma.soma_prc) {
+        throw new BadRequestException(
+          `Qtd. de praças (${novoPrc}) não pode ser menor que a soma já distribuída nos eventos (${eventosSoma.soma_prc}).`,
+        );
+      }
+
+      // Validação contra o teto (já existia)
       const result = await manager
         .createQueryBuilder(Distribuicao, 'd')
         .select('COALESCE(SUM(d.qtd_dist_of), 0)', 'soma_of')
@@ -291,7 +427,6 @@ export class DistribuicaoService {
       if (soma_of + novoOf > distribuicao.teto.ttctof) {
         throw new BadRequestException('OF ultrapassa o teto');
       }
-
       if (soma_prc + novoPrc > distribuicao.teto.ttctprc) {
         throw new BadRequestException('PRC ultrapassa o teto');
       }

@@ -107,7 +107,7 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
         'c',
         parent=styles['Normal'],
         alignment=TA_CENTER,
-        fontSize=8
+        fontSize=7
     )
 
     # Título da seção
@@ -380,7 +380,7 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
         'TELEFONE',
         'DATA E HORA',
         'APRESENTAÇÃO',
-        'FUNÇÃO | COTA',
+        'FUNÇÃO',
         'VIATURA',
         'ANOTAÇÕES'
     ]
@@ -395,19 +395,19 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
     col_widths = [
         usable_w * 0.03,  # Número
 
-        usable_w * 0.27,  # Identificação
+        usable_w * 0.26,  # Identificação
 
-        usable_w * 0.10,  # Telefone
+        usable_w * 0.09,  # Telefone
 
         usable_w * 0.16,  # Data/Hora
 
         usable_w * 0.11,  # Apresentação
 
-        usable_w * 0.09,  # Função/Cota
+        usable_w * 0.07,  # Função/Cota
 
-        usable_w * 0.09,  # Viatura
+        usable_w * 0.07,  # Viatura
 
-        usable_w * 0.15,  # Anotações
+        usable_w * 0.21,  # Anotações
     ]
 
     # =========================================================================
@@ -550,12 +550,12 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
         ('TOPPADDING', (0, 0), (-1, 0), 3),
 
         # CORPO DA TABELA
-        ('FONTSIZE', (0, 1), (-1, -1), 7.5),
+        ('FONTSIZE', (0, 1), (-1, -1), 6),
 
         ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
 
-        ('TOPPADDING', (0, 1), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
+        ('TOPPADDING', (0, 1), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 2),
 
         # GRID
         ('GRID', (0, 0), (-1, -1), 0.4, CINZA_BORDA),

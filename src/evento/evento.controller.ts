@@ -9,9 +9,9 @@ import {
   ParseIntPipe,
   UseGuards,
   Req,
+  Res,
 } from '@nestjs/common';
 import { Query } from '@nestjs/common';
-import type { Request } from 'express';
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/guards/roles.guard';
 import { Roles } from 'src/decorators/roles.decorator';
@@ -33,7 +33,7 @@ export class EventoController {
   alterarStatus(
     @Param('id') id: number,
     @Body('status') status: StatusEvento,
-    @Req() req,
+    @Req() req: any,
   ) {
     return this.service.alterarStatus(id, status, req.user);
   }
@@ -52,17 +52,68 @@ export class EventoController {
     return this.service.getResumoEscalas(id);
   }
 
+  @Get(':id/pdf')
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.AUXILIAR,
+    UserType.DIRETOR,
+    UserType.ESTRATEGICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+  )
+  async downloadPdf(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+    @Res() res: any,
+  ): Promise<void> {
+    const matUsuario: string =
+      req.user?.mat ?? req.user?.id?.toString() ?? 'N/A';
+
+    const { buffer, nomeEvento } = await this.service.generatePdf(
+      id,
+      matUsuario,
+    );
+
+    const filename = `EVENTO_${nomeEvento}.pdf`;
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+
+    res.end(buffer);
+  }
+
   @Post()
-  @Roles(UserType.MASTER, UserType.TECNICO, UserType.DIRETOR)
-  create(@Body() dto: CreateEventoDto, @Req() req: Request) {
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.DIRETOR,
+    UserType.GESTOR_VERBA,
+  )
+  create(@Body() dto: CreateEventoDto, @Req() req: any) {
     return this.service.create(dto, req.user as UserEntity);
   }
 
-  // evento.controller.ts
   @Get()
-  findAll(@Query('distribuicaoId') distribuicaoId?: string) {
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.DIRETOR,
+    UserType.AUXILIAR,
+    UserType.GESTOR_VERBA,
+  )
+  findAll(
+    @Query('distribuicaoId') distribuicaoId?: string,
+    @Query('omeId') omeId?: string,
+    @Req() req?: any,
+  ) {
     return this.service.findAll(
       distribuicaoId ? Number(distribuicaoId) : undefined,
+      omeId ? Number(omeId) : undefined,
+      req?.user as UserEntity,
     );
   }
 
@@ -72,18 +123,28 @@ export class EventoController {
   }
 
   @Patch(':id')
-  @Roles(UserType.MASTER, UserType.TECNICO, UserType.DIRETOR)
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.DIRETOR,
+    UserType.GESTOR_VERBA,
+  )
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateEventoDto,
-    @Req() req,
+    @Req() req: any,
   ) {
     return this.service.update(id, dto, req.user);
   }
 
   @Delete(':id')
-  @Roles(UserType.MASTER, UserType.TECNICO, UserType.DIRETOR)
-  remove(@Param('id', ParseIntPipe) id: number, @Req() req) {
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.DIRETOR,
+    UserType.GESTOR_VERBA,
+  )
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.service.remove(id, req.user);
   }
 }
