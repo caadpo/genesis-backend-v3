@@ -202,13 +202,13 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
         (imagem_url, sistema, nome_verba, cod_verba, valor_total,
          ttctof, ttctprc, data_inicio, data_fim, tipo_periodo, status)
       VALUES
-        ('/logo_dpo.png',    'PJES','GOVERNO',   '247', 50000,  100, 100, '2026-05-01','2026-05-30','MENSAL','ABERTO'),
-        ('/pe_logo.png',     'PJES','P ESCOLAR', '263', 250000, 500, 500, '2026-05-01','2026-05-30','MENSAL','ABERTO'),
-        ('/mobi_logo.png',   'PJES','CTM BRT',   '255', 50000,  100, 100, '2026-05-01','2026-05-30','MENSAL','ABERTO'),
-        ('/brasil_logo.png', 'PJES','FEDERAL',   '250', 12500,   25,  25, '2026-05-01','2026-05-30','MENSAL','ABERTO'),
-        ('/alepe_logo.png',  'PJES','ALEPE',     '270', 5000,    10,  10, '2026-05-01','2026-05-30','MENSAL','ABERTO'),
-        ('/tjpe_logo.png',   'PJES','TJPE',      '290', 25000,   50,  50, '2026-05-01','2026-05-30','MENSAL','ABERTO'),
-        ('/sds_logo.png',    'PJES','SDS',       '299', 100000, 200, 200, '2026-05-01','2026-05-30','MENSAL','ABERTO');
+        ('/logo_dpo.png',    'PJES','GOVERNO',   '247', 50000,  100, 100, '2026-06-01','2026-06-30','MENSAL','ABERTO'),
+        ('/pe_logo.png',     'PJES','P ESCOLAR', '263', 250000, 500, 500, '2026-06-01','2026-06-30','MENSAL','ABERTO'),
+        ('/mobi_logo.png',   'PJES','CTM BRT',   '255', 50000,  100, 100, '2026-06-01','2026-06-30','MENSAL','ABERTO'),
+        ('/brasil_logo.png', 'PJES','FEDERAL',   '250', 12500,   25,  25, '2026-06-01','2026-06-30','MENSAL','ABERTO'),
+        ('/alepe_logo.png',  'PJES','ALEPE',     '270', 5000,    10,  10, '2026-06-01','2026-06-30','MENSAL','ABERTO'),
+        ('/tjpe_logo.png',   'PJES','TJPE',      '290', 25000,   50,  50, '2026-06-01','2026-06-30','MENSAL','ABERTO'),
+        ('/sds_logo.png',    'PJES','SDS',       '299', 100000, 200, 200, '2026-06-01','2026-06-30','MENSAL','ABERTO');
     `);
 
     /**
@@ -219,13 +219,13 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
         (imagem_url, sistema, nome_verba, cod_verba, valor_total,
          ttctof, ttctprc, data_inicio, data_fim, tipo_periodo, status)
       VALUES
-        ('/logo_dpo.png',    'DIARIAS','GOVERNO DIÁRIAS',   'D247', 50000,  100, 100, '2026-05-01', NULL, 'OPERACAO','ABERTO'),
-        ('/pe_logo.png',     'DIARIAS','P ESCOLAR DIÁRIAS', 'D263', 250000, 500, 500, '2026-05-01', NULL, 'OPERACAO','ABERTO'),
-        ('/mobi_logo.png',   'DIARIAS','CTM BRT DIÁRIAS',   'D255', 50000,  100, 100, '2026-05-01', NULL, 'OPERACAO','ABERTO'),
-        ('/brasil_logo.png', 'DIARIAS','FEDERAL DIÁRIAS',   'D250', 12500,   25,  25, '2026-05-01', NULL, 'OPERACAO','ABERTO'),
-        ('/alepe_logo.png',  'DIARIAS','ALEPE DIÁRIAS',     'D270', 5000,    10,  10, '2026-05-01', NULL, 'OPERACAO','ABERTO'),
-        ('/tjpe_logo.png',   'DIARIAS','TJPE DIÁRIAS',      'D290', 25000,   50,  50, '2026-05-01', NULL, 'OPERACAO','ABERTO'),
-        ('/sds_logo.png',    'DIARIAS','SDS DIÁRIAS',       'D299', 100000, 200, 200, '2026-05-01', NULL, 'OPERACAO','ABERTO');
+        ('/logo_dpo.png',    'DIARIAS','GOVERNO DIÁRIAS',   'D247', 50000,  100, 100, '2026-06-01', '2026-06-30', 'OPERACAO','ABERTO'),
+        ('/pe_logo.png',     'DIARIAS','P ESCOLAR DIÁRIAS', 'D263', 250000, 500, 500, '2026-06-01', '2026-06-30', 'OPERACAO','ABERTO'),
+        ('/mobi_logo.png',   'DIARIAS','CTM BRT DIÁRIAS',   'D255', 50000,  100, 100, '2026-06-01', '2026-06-30', 'OPERACAO','ABERTO'),
+        ('/brasil_logo.png', 'DIARIAS','FEDERAL DIÁRIAS',   'D250', 12500,   25,  25, '2026-06-01', '2026-06-30', 'OPERACAO','ABERTO'),
+        ('/alepe_logo.png',  'DIARIAS','ALEPE DIÁRIAS',     'D270', 5000,    10,  10, '2026-06-01', '2026-06-30', 'OPERACAO','ABERTO'),
+        ('/tjpe_logo.png',   'DIARIAS','TJPE DIÁRIAS',      'D290', 25000,   50,  50, '2026-06-01', '2026-06-30', 'OPERACAO','ABERTO'),
+        ('/sds_logo.png',    'DIARIAS','SDS DIÁRIAS',       'D299', 100000, 200, 200, '2026-06-01', '2026-06-30', 'OPERACAO','ABERTO');
     `);
   }
 

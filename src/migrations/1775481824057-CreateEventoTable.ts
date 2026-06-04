@@ -33,6 +33,11 @@ export class CreateEventoTable1775481824057 implements MigrationInterface {
             length: '100',
           },
           {
+            name: 'ne',
+            type: 'varchar',
+            length: '100',
+          },
+          {
             name: 'qtd_of_evento',
             type: 'int',
           },

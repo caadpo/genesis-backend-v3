@@ -19,7 +19,6 @@ export class ViaturaService {
     private readonly repo: Repository<ViaturaEntity>,
   ) {}
 
-  // AUXILIAR só enxerga/manipula viaturas da sua própria OME
   private checarOme(
     viaturaOmeId: number,
     usuarioLogado: { typeUser: number; omeId: number },
@@ -30,6 +29,18 @@ export class ViaturaService {
     ) {
       throw new ForbiddenException('Você só pode acessar viaturas da sua OME');
     }
+  }
+
+  async findByOperacao(operacaoId: number): Promise<ReturnViaturaDto[]> {
+    const viaturas = await this.repo
+      .createQueryBuilder('v')
+      .innerJoin('operacao', 'op', 'op.id = :operacaoId', { operacaoId })
+      .innerJoin('evento', 'ev', 'ev.id = op.evento_id')
+      .where('v.omeid = ev.ome_id')
+      .orderBy('v.patrimonio', 'ASC')
+      .getMany();
+
+    return viaturas.map((v) => new ReturnViaturaDto(v));
   }
 
   async create(

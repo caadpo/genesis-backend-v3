@@ -4,6 +4,7 @@ import { ReturnOmeDto } from 'src/ome/dtos/return-ome.dto';
 export class ReturnEventoDto {
   id: number;
   nome_evento: string;
+  ne: string;
   qtd_of_evento: number;
   qtd_prc_evento: number;
   status_evento: string;
@@ -17,6 +18,7 @@ export class ReturnEventoDto {
   constructor(evento: any) {
     this.id = evento.id;
     this.nome_evento = evento.nome_evento;
+    this.ne = evento.ne;
     this.qtd_of_evento = evento.qtd_of_evento;
     this.qtd_prc_evento = evento.qtd_prc_evento;
     this.status_evento = evento.status_evento;

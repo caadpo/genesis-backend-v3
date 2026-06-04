@@ -101,6 +101,12 @@ export class EscalaEntity {
   @JoinColumn({ name: 'viatura_id' })
   viatura?: ViaturaEntity;
 
+  @Column({ type: 'boolean', default: false, name: 'is_repasse' })
+  isRepasse!: boolean;
+
+  @Column({ type: 'integer', nullable: true, name: 'repasse_origem_id' })
+  repasseOrigemId?: number | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 

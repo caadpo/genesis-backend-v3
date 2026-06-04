@@ -109,7 +109,7 @@ export class EscalaService {
   private async verificarViatura(
     viaturaId: number | null | undefined,
     funcao: string,
-    omeId: number,
+    operacaoId: number, // ← era omeId, agora é operacaoId
   ): Promise<void> {
     if (!viaturaId) return;
 
@@ -119,14 +119,19 @@ export class EscalaService {
       );
     }
 
-    const viatura = await this.viaturaRepo.findOne({
-      where: { id: viaturaId },
-    });
+    const [viatura, operacao] = await Promise.all([
+      this.viaturaRepo.findOne({ where: { id: viaturaId } }),
+      this.operacaoRepo.findOne({
+        where: { id: operacaoId },
+        relations: { evento: { ome: true } },
+      }),
+    ]);
 
     if (!viatura) throw new NotFoundException('Viatura não encontrada');
 
-    if (viatura.omeId !== omeId) {
-      throw new ForbiddenException('Você só pode atribuir viaturas da sua OME');
+    const omeDoEvento = operacao?.evento?.ome?.id;
+    if (viatura.omeId !== omeDoEvento) {
+      throw new ForbiddenException('A viatura não pertence à OME do evento');
     }
   }
 
@@ -357,7 +362,7 @@ export class EscalaService {
       this.buscarUsuario(dto.usuarioId),
       this.verificarPermissaoOme(dto.operacaoId, usuarioLogado),
       this.verificarStatusEvento(dto.operacaoId),
-      this.verificarViatura(dto.viaturaId, dto.funcao, usuarioLogado.omeId),
+      this.verificarViatura(dto.viaturaId, dto.funcao, dto.operacaoId),
     ]);
 
     const cota = this.calcularCota(dto.horaInicio, dto.horaFim);
@@ -430,7 +435,7 @@ export class EscalaService {
       this.verificarPermissaoOme(operacaoId, usuarioLogado),
       this.verificarStatusEvento(operacaoId),
       dto.usuarioId ? this.buscarUsuario(dto.usuarioId) : Promise.resolve(null),
-      this.verificarViatura(dto.viaturaId, funcaoFinal, usuarioLogado.omeId),
+      this.verificarViatura(dto.viaturaId, funcaoFinal, operacaoId),
     ]);
 
     if (novoUsuario) {
@@ -438,7 +443,6 @@ export class EscalaService {
       escala.usuario = { id: dto.usuarioId } as UserEntity;
       escala.conta = usuario.conta ?? undefined;
       escala.nomeome_escala = usuario.ome?.nomeOme ?? escala.nomeome_escala;
-      // Atualiza o snapshot inteiro quando o usuário muda
       escala.pg_escala = sgp.pgSgp;
       escala.mat_escala = sgp.matSgp;
       escala.ng_escala = sgp.nomeGuerraSgp;

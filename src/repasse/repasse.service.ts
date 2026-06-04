@@ -146,6 +146,8 @@ export class RepasseService {
           'sgp.nunvincSgp',
           'sgp.localApresentacaoSgp',
           'sgp.situacaoSgp',
+          'sgp.nomeCompletoSgp',
+          'sgp.matSgp',
         ])
         .where('sgp.matSgp = :mat', { mat: usuarioLogado.mat })
         .getOne(),
@@ -215,9 +217,21 @@ export class RepasseService {
       // 2. Atualiza a escala com os dados do receptor
       await manager.update(EscalaEntity, repasse.escala.id, {
         usuario: { id: usuarioLogado.id },
+        // ─── Snapshot dos dados SGP do receptor no momento do aceite ───
+        pg_escala: sgpReceptor?.pgSgp ?? '',
+        mat_escala: sgpReceptor?.matSgp ?? usuarioLogado.mat,
+        ng_escala: sgpReceptor?.nomeGuerraSgp ?? '',
+        tipo_escala: sgpReceptor?.tipoSgp ?? '',
+        cpf_escala: sgpReceptor?.cpfSgp ?? '',
+        nomecompleto_escala: sgpReceptor?.nomeCompletoSgp ?? '', // ← precisa adicionar ao select
         nomeome_escala: receptor.ome?.nomeOme ?? '',
-        //dadosSgp: sgpReceptor ? { id: sgpReceptor.id } : () => 'NULL',
+        nunfunc_escala: sgpReceptor?.nunfuncSgp ?? '', // ← precisa adicionar ao select
+        nunvinc_escala: sgpReceptor?.nunvincSgp ?? '', // ← precisa adicionar ao select
+        situacao: sgpReceptor?.situacaoSgp ?? 'REGULAR', // ← precisa adicionar ao select
+        // ─── Conta e flags ──────────────────────────────────────────────
         conta: receptor.conta ? { id: receptor.conta.id } : () => 'NULL',
+        isRepasse: true,
+        repasseOrigemId: repasseId,
       });
     });
 

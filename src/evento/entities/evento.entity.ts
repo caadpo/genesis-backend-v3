@@ -28,6 +28,9 @@ export class Evento {
   @Column({ type: 'varchar', length: 100 })
   nome_evento!: string;
 
+  @Column({ type: 'varchar', length: 100 })
+  ne!: string;
+
   @Column({ type: 'int' })
   qtd_of_evento!: number;
 

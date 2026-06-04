@@ -148,6 +148,20 @@ export class CreateEscalaTable1775481824600 implements MigrationInterface {
             type: 'integer',
             isNullable: true,
           },
+
+          {
+            name: 'is_repasse',
+            type: 'boolean',
+            isNullable: false,
+            default: false,
+            comment: 'Indica se essa escala foi obtida via repasse',
+          },
+          {
+            name: 'repasse_origem_id',
+            type: 'integer',
+            isNullable: true,
+            comment: 'ID do repasse que originou esta escala',
+          },
           {
             name: 'created_at',
             type: 'timestamp',

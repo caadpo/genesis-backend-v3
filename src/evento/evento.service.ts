@@ -162,6 +162,7 @@ export class EventoService {
     return {
       id: evento.id,
       nome_evento: evento.nome_evento,
+      ne: evento.ne ?? '',
       qtd_of_evento: evento.qtd_of_evento,
       qtd_prc_evento: evento.qtd_prc_evento,
       status_evento: evento.status_evento,
@@ -483,6 +484,7 @@ export class EventoService {
       distribuicao,
       ome,
       nome_evento: dto.nome_evento,
+      ne: dto.ne ?? '',
       qtd_of_evento: dto.qtd_of_evento,
       qtd_prc_evento: dto.qtd_prc_evento,
       user: user,
@@ -638,6 +640,7 @@ export class EventoService {
     if (dto.qtd_prc_evento !== undefined)
       evento.qtd_prc_evento = dto.qtd_prc_evento;
     if (dto.nome_evento !== undefined) evento.nome_evento = dto.nome_evento;
+    if (dto.ne !== undefined) evento.ne = dto.ne;
 
     await this.eventoRepo.save(evento);
     return this.findOne(id);

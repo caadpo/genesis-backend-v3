@@ -32,6 +32,9 @@ export class ReturnEscalaDto {
   funcao: string;
   situacao: string;
   anotacoes?: string;
+  isRepasse: boolean;
+  repasseOrigemId?: number | null;
+
   createdAt: Date;
   updatedAt: Date;
   usuarioId?: number;
@@ -72,6 +75,8 @@ export class ReturnEscalaDto {
     this.funcao = e.funcao;
     this.situacao = e.situacao;
     this.anotacoes = e.anotacoes;
+    this.isRepasse = e.isRepasse;
+    this.repasseOrigemId = e.repasseOrigemId ?? null;
     this.createdAt = e.createdAt;
     this.updatedAt = e.updatedAt;
     this.usuarioId = e.usuario?.id;

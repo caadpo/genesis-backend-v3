@@ -10,6 +10,10 @@ export class CreateEventoDto {
   @IsString()
   nome_evento!: string;
 
+  @IsString()
+  @IsOptional()
+  ne?: string;
+
   @IsInt()
   qtd_of_evento!: number;
 

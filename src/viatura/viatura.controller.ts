@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -39,7 +40,10 @@ export class ViaturaController {
     UserType.FINANCEIRO,
     UserType.PD,
   )
-  findAll(@Request() req: any) {
+  findAll(@Request() req: any, @Query('operacaoId') operacaoId?: string) {
+    if (operacaoId) {
+      return this.service.findByOperacao(Number(operacaoId));
+    }
     return this.service.findByOme(req.user);
   }
 

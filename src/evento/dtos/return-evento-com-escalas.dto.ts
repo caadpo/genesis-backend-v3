@@ -19,6 +19,7 @@ export class UsuarioResumoEscalaDto {
 export class ReturnEventoComEscalasDto {
   id!: number;
   nome_evento!: string;
+  ne!: string;
   qtd_of_evento!: number;
   qtd_prc_evento!: number;
   status_evento!: string;
