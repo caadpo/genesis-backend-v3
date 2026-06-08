@@ -280,6 +280,80 @@ export class EscalaService {
     }
   }
 
+  private async verificarLimiteCotasUsuario(
+    matEscala: string,
+    sistema: string,
+    operacaoId: number,
+    novaCota: number,
+    excludeId?: number,
+  ): Promise<void> {
+    const LIMITE_PJES = 12;
+    const LIMITE_DIARIAS = 30;
+
+    let somaAtual = 0;
+
+    if (sistema === 'PJES') {
+      // Limite mensal: soma todas as cotas do usuário no mesmo mês/ano
+      const qb = this.repo
+        .createQueryBuilder('e')
+        .select('COALESCE(SUM(e.cota_escala), 0)', 'soma')
+        .where('e.mat_escala = :mat', { mat: matEscala })
+        .andWhere('e.sistema = :sistema', { sistema })
+        .andWhere(
+          `EXTRACT(MONTH FROM e.data_inicio) = (
+          SELECT EXTRACT(MONTH FROM e2.data_inicio)
+          FROM escala e2
+          INNER JOIN operacao op2 ON op2.id = e2.operacao_id
+          WHERE op2.id = :operacaoId
+          LIMIT 1
+        )`,
+          { operacaoId },
+        )
+        .andWhere(
+          `EXTRACT(YEAR FROM e.data_inicio) = (
+          SELECT EXTRACT(YEAR FROM e2.data_inicio)
+          FROM escala e2
+          INNER JOIN operacao op2 ON op2.id = e2.operacao_id
+          WHERE op2.id = :operacaoId
+          LIMIT 1
+        )`,
+          { operacaoId },
+        );
+
+      if (excludeId) qb.andWhere('e.id != :excludeId', { excludeId });
+
+      const result = await qb.getRawOne<{ soma: string }>();
+      somaAtual = Number(result?.soma ?? 0);
+
+      if (somaAtual + novaCota > LIMITE_PJES) {
+        throw new BadRequestException(
+          `Usuário já está com ${somaAtual} cotas para o sistema PJES neste mês. Limite: ${LIMITE_PJES}`,
+        );
+      }
+    }
+
+    if (sistema === 'DIARIAS') {
+      // Limite por operação: soma todas as cotas do usuário na mesma operação
+      const qb = this.repo
+        .createQueryBuilder('e')
+        .select('COALESCE(SUM(e.cota_escala), 0)', 'soma')
+        .where('e.mat_escala = :mat', { mat: matEscala })
+        .andWhere('e.sistema = :sistema', { sistema })
+        .andWhere('e.operacao_id = :operacaoId', { operacaoId });
+
+      if (excludeId) qb.andWhere('e.id != :excludeId', { excludeId });
+
+      const result = await qb.getRawOne<{ soma: string }>();
+      somaAtual = Number(result?.soma ?? 0);
+
+      if (somaAtual + novaCota > LIMITE_DIARIAS) {
+        throw new BadRequestException(
+          `Usuário já está com ${somaAtual} cotas para o sistema DIARIAS nesta operação. Limite: ${LIMITE_DIARIAS}`,
+        );
+      }
+    }
+  }
+
   // ── Find minhas escalas ─────────────────────────────────────────────────────
 
   async findMinhasEscalas(usuarioLogado: {
@@ -352,6 +426,55 @@ export class EscalaService {
     });
   }
 
+  async findEscalasByUsuario(
+    usuarioId: number,
+    sistema: string,
+    usuarioLogado: { id: number; typeUser: number },
+  ): Promise<ReturnEscalaDto[]> {
+    const logadoType = Number(usuarioLogado.typeUser);
+    const isMasterOuTecnico =
+      logadoType === UserType.MASTER || logadoType === UserType.TECNICO;
+    const isAuxiliar = logadoType === UserType.AUXILIAR;
+
+    if (!isMasterOuTecnico && !isAuxiliar) {
+      throw new ForbiddenException(
+        'Você não tem permissão para acessar essa área',
+      );
+    }
+
+    // Se for AUXILIAR, não pode ver TECNICO, MASTER ou DIRETOR
+    if (isAuxiliar) {
+      const alvo = await this.userRepo.findOne({ where: { id: usuarioId } });
+      if (!alvo) throw new NotFoundException('Usuário não encontrado');
+
+      const tiposProibidos = [
+        UserType.MASTER,
+        UserType.TECNICO,
+        UserType.DIRETOR,
+      ];
+      if (tiposProibidos.includes(Number(alvo.typeUser))) {
+        throw new ForbiddenException(
+          'Você não tem permissão para visualizar a escala deste usuário',
+        );
+      }
+    }
+
+    const escalas = await this.repo
+      .createQueryBuilder('e')
+      .leftJoinAndSelect('e.viatura', 'viatura')
+      .leftJoinAndSelect('e.operacao', 'operacao')
+      .leftJoinAndSelect('operacao.evento', 'evento')
+      .leftJoinAndSelect('evento.ome', 'ome')
+      .leftJoinAndSelect('e.conta', 'conta')
+      .where('e.usuario_id = :usuarioId', { usuarioId })
+      .andWhere('e.sistema = :sistema', { sistema })
+      .orderBy('e.data_inicio', 'ASC')
+      .addOrderBy('e.hora_inicio', 'ASC')
+      .getMany();
+
+    return escalas.map((e) => new ReturnEscalaDto(e));
+  }
+
   // ── Create ──────────────────────────────────────────────────────────────────
 
   async create(
@@ -370,6 +493,12 @@ export class EscalaService {
     await Promise.all([
       this.verificarConflito(sgp.matSgp, dto.dataInicio, dto.sistema),
       this.verificarTeto(dto.operacaoId, sgp.tipoSgp, cota),
+      this.verificarLimiteCotasUsuario(
+        sgp.matSgp,
+        dto.sistema,
+        dto.operacaoId,
+        cota,
+      ),
     ]);
 
     const escala = this.repo.create({
@@ -464,6 +593,13 @@ export class EscalaService {
     await Promise.all([
       this.verificarConflito(novaMatEscala, novaData, novaSistema, id),
       this.verificarTeto(operacaoId, novaTipo, novaCota, id),
+      this.verificarLimiteCotasUsuario(
+        novaMatEscala,
+        novaSistema,
+        operacaoId,
+        novaCota,
+        id,
+      ),
     ]);
 
     Object.assign(escala, {

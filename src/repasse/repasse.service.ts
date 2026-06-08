@@ -34,6 +34,69 @@ export class RepasseService {
     private readonly dataSource: DataSource,
   ) {}
 
+  private async verificarLimiteCotasUsuarioRepasse(
+    matEscala: string,
+    sistema: string,
+    operacaoId: number,
+    novaCota: number,
+  ): Promise<void> {
+    const LIMITE_PJES = 12;
+    const LIMITE_DIARIAS = 30;
+
+    if (sistema === 'PJES') {
+      const qb = this.escalaRepo
+        .createQueryBuilder('e')
+        .select('COALESCE(SUM(e.cota_escala), 0)', 'soma')
+        .where('e.mat_escala = :mat', { mat: matEscala })
+        .andWhere('e.sistema = :sistema', { sistema })
+        .andWhere(
+          `EXTRACT(MONTH FROM e.data_inicio) = (
+          SELECT EXTRACT(MONTH FROM e2.data_inicio)
+          FROM escala e2
+          WHERE e2.operacao_id = :operacaoId
+          LIMIT 1
+        )`,
+          { operacaoId },
+        )
+        .andWhere(
+          `EXTRACT(YEAR FROM e.data_inicio) = (
+          SELECT EXTRACT(YEAR FROM e2.data_inicio)
+          FROM escala e2
+          WHERE e2.operacao_id = :operacaoId
+          LIMIT 1
+        )`,
+          { operacaoId },
+        );
+
+      const result = await qb.getRawOne<{ soma: string }>();
+      const somaAtual = Number(result?.soma ?? 0);
+
+      if (somaAtual + novaCota > LIMITE_PJES) {
+        throw new BadRequestException(
+          `Você já está com ${somaAtual} cotas para o sistema PJES neste mês. Limite: ${LIMITE_PJES}`,
+        );
+      }
+    }
+
+    if (sistema === 'DIARIAS') {
+      const result = await this.escalaRepo
+        .createQueryBuilder('e')
+        .select('COALESCE(SUM(e.cota_escala), 0)', 'soma')
+        .where('e.mat_escala = :mat', { mat: matEscala })
+        .andWhere('e.sistema = :sistema', { sistema })
+        .andWhere('e.operacao_id = :operacaoId', { operacaoId })
+        .getRawOne<{ soma: string }>();
+
+      const somaAtual = Number(result?.soma ?? 0);
+
+      if (somaAtual + novaCota > LIMITE_DIARIAS) {
+        throw new BadRequestException(
+          `Você já está com ${somaAtual} cotas para o sistema DIARIAS nesta operação. Limite: ${LIMITE_DIARIAS}`,
+        );
+      }
+    }
+  }
+
   // ─── CRIAR REPASSE ──────────────────────────────────────────────────────────
   /**
    * O usuário logado anuncia que quer repassar uma escala sua.
@@ -205,6 +268,15 @@ export class RepasseService {
         `Você já está escalado no dia ${repasse.dataInicioRepasse} para o sistema ${repasse.sistemaRepasse}`,
       );
     }
+
+    // ─── Verifica limite de cotas do receptor ─────────────────────────────────
+    const cotaDoRepasse = repasse.escala.cota_escala; // 1 ou 2
+    await this.verificarLimiteCotasUsuarioRepasse(
+      usuarioLogado.mat,
+      repasse.sistemaRepasse,
+      repasse.escala.operacao.id,
+      cotaDoRepasse,
+    );
 
     // ─── Transação atômica ────────────────────────────────────────────────────
     await this.dataSource.transaction(async (manager) => {

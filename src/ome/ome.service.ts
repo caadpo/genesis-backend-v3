@@ -19,9 +19,26 @@ export class OmeService {
     return new ReturnOmeDto(saved);
   }
 
-  async findAll(): Promise<ReturnOmeDto[]> {
-    const omes = await this.omeRepository.find({ relations: ['diretoria'] });
+  async findAll(diretoriaId?: number): Promise<ReturnOmeDto[]> {
+    const qb = this.omeRepository
+      .createQueryBuilder('ome')
+      .leftJoinAndSelect('ome.diretoria', 'diretoria')
+      .orderBy('ome.nomeOme', 'ASC');
+
+    if (diretoriaId) {
+      qb.where('diretoria.id = :diretoriaId', { diretoriaId });
+    }
+
+    const omes = await qb.getMany();
     return omes.map((ome) => new ReturnOmeDto(ome));
+  }
+
+  async getDiretoriaIdByOme(omeId: number): Promise<number | undefined> {
+    const ome = await this.omeRepository.findOne({
+      where: { id: omeId },
+      relations: ['diretoria'],
+    });
+    return ome?.diretoria?.id;
   }
 
   async findOne(id: number): Promise<ReturnOmeDto> {

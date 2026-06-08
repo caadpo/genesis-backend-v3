@@ -60,6 +60,7 @@ export class EscalaController {
   @Roles(
     UserType.MASTER,
     UserType.TECNICO,
+    UserType.DIRETOR,
     UserType.AUXILIAR,
     UserType.FINANCEIRO,
     UserType.PD,
@@ -73,6 +74,7 @@ export class EscalaController {
   @Roles(
     UserType.MASTER,
     UserType.TECNICO,
+    UserType.DIRETOR,
     UserType.AUXILIAR,
     UserType.FINANCEIRO,
     UserType.PD,
@@ -118,6 +120,16 @@ export class EscalaController {
   )
   findMinhas(@Request() req: any) {
     return this.service.findMinhasEscalas(req.user);
+  }
+
+  @Get('usuario/:usuarioId')
+  @Roles(UserType.MASTER, UserType.TECNICO, UserType.DIRETOR, UserType.AUXILIAR)
+  findByUsuario(
+    @Param('usuarioId', ParseIntPipe) usuarioId: number,
+    @Query('sistema') sistema: string,
+    @Request() req: any,
+  ) {
+    return this.service.findEscalasByUsuario(usuarioId, sistema, req.user);
   }
 
   @Get(':id')

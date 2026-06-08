@@ -91,7 +91,7 @@ export class EventoService {
       .innerJoin('e.operacao', 'op')
       .innerJoin('op.evento', 'ev')
       .innerJoin('e.usuario', 'u')
-      .leftJoin('e.conta', 'c')
+      .leftJoin('u.conta', 'c')
       .where('ev.id = :eventoId', { eventoId })
       .groupBy('e.usuario_id')
       .addGroupBy('e.mat_escala')

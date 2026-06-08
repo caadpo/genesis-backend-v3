@@ -137,7 +137,6 @@ export class UserService {
     }
   }
 
-  // Buscar usuário
   async findById(id: number): Promise<UserEntity> {
     const user = await this.userRepository.findOne({
       where: { id },

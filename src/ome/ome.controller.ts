@@ -9,6 +9,8 @@ import {
   Delete,
   ParseIntPipe,
   UseGuards,
+  Request,
+  Query,
 } from '@nestjs/common';
 import { OmeService } from './ome.service';
 import { CreateOmeDto } from './dtos/create-ome.dto';
@@ -17,11 +19,15 @@ import { Roles } from 'src/decorators/roles.decorator';
 import { UserType } from 'src/user/enum/user-type.enum';
 import { RolesGuard } from 'src/guards/roles.guard';
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
+import { UserService } from 'src/user/user.service';
 
 @Controller('ome')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class OmeController {
-  constructor(private readonly omeService: OmeService) {}
+  constructor(
+    private readonly omeService: OmeService,
+    private readonly userService: UserService,
+  ) {}
 
   @Post()
   @Roles(UserType.MASTER)
@@ -30,8 +36,21 @@ export class OmeController {
   }
 
   @Get()
-  async findAll(): Promise<ReturnOmeDto[]> {
-    return this.omeService.findAll();
+  async findAll(
+    @Request() req: any,
+    @Query('diretoriaId') diretoriaId?: string,
+  ): Promise<ReturnOmeDto[]> {
+    const typeUser = Number(req.user?.typeUser);
+
+    if (typeUser === UserType.DIRETOR) {
+      const user = await this.userService.findById(req.user.id);
+      const dirId = await this.omeService.getDiretoriaIdByOme(user.omeId);
+      return this.omeService.findAll(dirId);
+    }
+
+    return this.omeService.findAll(
+      diretoriaId ? Number(diretoriaId) : undefined,
+    );
   }
 
   @Get(':id')

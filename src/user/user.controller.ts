@@ -34,7 +34,7 @@ export class UserController {
   }
 
   @Get('search')
-  @Roles(UserType.MASTER)
+  @Roles(UserType.MASTER, UserType.TECNICO, UserType.DIRETOR, UserType.AUXILIAR)
   async searchUser(@Query('q') q: string): Promise<UserSearchDto | null> {
     return this.userService.findByMatOrNomeGuerra(q);
   }
@@ -53,6 +53,17 @@ export class UserController {
     return this.userService.updateUser(id, dto);
   }
 
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.DIRETOR,
+    UserType.AUXILIAR,
+    UserType.ESTRATEGICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.GESTOR_VERBA,
+    UserType.COMUN,
+  )
   @Put('me/password')
   async changeOwnPassword(@Request() req: any, @Body() dto: ChangePasswordDto) {
     await this.userService.changeOwnPassword(
@@ -71,6 +82,17 @@ export class UserController {
     return { message: 'Senha resetada para o padrão genesis' };
   }
 
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.DIRETOR,
+    UserType.AUXILIAR,
+    UserType.ESTRATEGICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.GESTOR_VERBA,
+    UserType.COMUN,
+  )
   @Put('me/imagem')
   async updateOwnImagem(
     @Request() req: any,
@@ -79,6 +101,17 @@ export class UserController {
     return this.userService.updateOwnImagem(req.user.id, body.imagemUrl);
   }
 
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.DIRETOR,
+    UserType.AUXILIAR,
+    UserType.ESTRATEGICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.GESTOR_VERBA,
+    UserType.COMUN,
+  )
   @Put('me/phone')
   async updateOwnPhone(@Request() req: any, @Body() dto: UpdatePhoneDto) {
     return this.userService.updateOwnPhone(req.user.id, dto.phone);

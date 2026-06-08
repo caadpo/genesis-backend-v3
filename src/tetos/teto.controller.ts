@@ -8,7 +8,9 @@ import {
   Delete,
   ParseIntPipe,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/guards/roles.guard';
@@ -79,7 +81,6 @@ export class TetosController {
     return this.tetoService.update(id, dto);
   }
 
-  // 🔒 ENCERRAR FOLHA
   @Patch(':id/encerrar')
   @Roles(UserType.MASTER)
   encerrar(@Param('id', ParseIntPipe) id: number): Promise<Teto> {
@@ -90,5 +91,23 @@ export class TetosController {
   @Roles(UserType.MASTER)
   remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
     return this.tetoService.remove(id);
+  }
+
+  @Get(':id/xls-escalas')
+  @Roles(UserType.MASTER)
+  async downloadXlsEscalas(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, nomeArquivo } = await this.tetoService.gerarXlsEscalas(id);
+
+    res.set({
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${nomeArquivo}.xlsx"`,
+      'Content-Length': buffer.length,
+    });
+
+    res.end(buffer);
   }
 }
