@@ -25,7 +25,13 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
           ('DINTER I'),
           ('DINTER II'),
           ('DASDH'),
-          ('TJPE');         
+          ('TJPE'),
+          ('CPRH'),
+          ('TCE'),
+          ('OE'),
+          ('CAMIL'),
+          ('MPPE'),
+          ('ALEPE');   
       `);
 
     /**
@@ -37,13 +43,91 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
         -- DPO
         SELECT 'DPO SEDE', id FROM diretoria WHERE nomediretoria = 'DPO'
         UNION ALL
+        SELECT '2ª EMG', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
         SELECT 'ADAGRO', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'OLS', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'SDS', id FROM diretoria WHERE nomediretoria = 'DPO'
         UNION ALL
         SELECT 'SEFAZ', id FROM diretoria WHERE nomediretoria = 'DPO'
         UNION ALL
+        SELECT 'ACG', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'AECI', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'AG', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'APMP', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'C.FARM', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'C.ODONT', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'CAMIL', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'CEFD', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'CFAP', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'CIMUS', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'CMH', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'COPOM', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'CPM', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'CPM - ANEXO I', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'CPO', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'CPP', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
         SELECT 'CREED', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'CRESEP', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'CSM/INT', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'CSM/MB', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'CSM/MOTO', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'CTT', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'DAL', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'DAS', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'DASIS', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'DEAJA', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'DEIP', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'DF', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'DGA', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'DGP', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'DVP', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'DPJM', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'DS', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'DTEC', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'EMG', id FROM diretoria WHERE nomediretoria = 'DPO'
+        UNION ALL
+        SELECT 'SDS', id FROM diretoria WHERE nomediretoria = 'DPO'
 
         -- DIM
+        UNION ALL
+        SELECT 'DIM SEDE', id FROM diretoria WHERE nomediretoria = 'DIM'
         UNION ALL
         SELECT '1º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
         UNION ALL
@@ -68,33 +152,45 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
         SELECT '25º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
         UNION ALL
         SELECT '26º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
+        UNION ALL
+        SELECT '28º BPM', id FROM diretoria WHERE nomediretoria = 'DIM'
 
         -- DIRESP
         UNION ALL
         SELECT 'DIRESP SEDE', id FROM diretoria WHERE nomediretoria = 'DIRESP'
         UNION ALL
-        SELECT 'BOPE', id FROM diretoria WHERE nomediretoria = 'DIRESP'
-        UNION ALL
-        SELECT 'BEPI', id FROM diretoria WHERE nomediretoria = 'DIRESP'
-        UNION ALL
-        SELECT 'BPRP', id FROM diretoria WHERE nomediretoria = 'DIRESP'
-        UNION ALL
-        SELECT 'BPTRAN', id FROM diretoria WHERE nomediretoria = 'DIRESP'
-        UNION ALL
-        SELECT 'BPA', id FROM diretoria WHERE nomediretoria = 'DIRESP'
-        UNION ALL
-        SELECT 'BPTUR', id FROM diretoria WHERE nomediretoria = 'DIRESP'
-        UNION ALL
-        SELECT 'CIPMOTO', id FROM diretoria WHERE nomediretoria = 'DIRESP'
-        UNION ALL
-        SELECT 'CIPCAES', id FROM diretoria WHERE nomediretoria = 'DIRESP'
-        UNION ALL
-        SELECT 'BPRV', id FROM diretoria WHERE nomediretoria = 'DIRESP'
-        UNION ALL
         SELECT '1º BIESP', id FROM diretoria WHERE nomediretoria = 'DIRESP'
         UNION ALL
         SELECT '2º BIESP', id FROM diretoria WHERE nomediretoria = 'DIRESP'
-
+        UNION ALL
+        SELECT '3º BIESP', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT '4º BIESP', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BEPI', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BPCHOQUE', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BOPE', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BPA', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BPGD', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BPRP', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BPRV', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BPTRAN', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'BPTUR', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'CIPCAES', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'CIPMOTO', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        UNION ALL
+        SELECT 'RPMON', id FROM diretoria WHERE nomediretoria = 'DIRESP'
+        
         -- DINTER I
         UNION ALL
         SELECT 'DINTER I SEDE', id FROM diretoria WHERE nomediretoria = 'DINTER I'
@@ -116,6 +212,16 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
         SELECT '24º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
         UNION ALL
         SELECT '27º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
+        UNION ALL
+        SELECT '5ª CIPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
+        UNION ALL
+        SELECT '6ª CIPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
+        UNION ALL
+        SELECT '8ª CIPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
+        UNION ALL
+        SELECT '10ª CIPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
+        UNION ALL
+        SELECT '11ª CIPM', id FROM diretoria WHERE nomediretoria = 'DINTER I'
 
         -- DINTER II
         UNION ALL
@@ -129,7 +235,19 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
         UNION ALL
         SELECT '8º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER II'
         UNION ALL
+        SELECT '14º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER II'
+        UNION ALL
         SELECT '23º BPM', id FROM diretoria WHERE nomediretoria = 'DINTER II'
+        UNION ALL
+        SELECT '1ª CIPM', id FROM diretoria WHERE nomediretoria = 'DINTER II'
+        UNION ALL
+        SELECT '2ª CIPM', id FROM diretoria WHERE nomediretoria = 'DINTER II'
+        UNION ALL
+        SELECT '4ª CIPM', id FROM diretoria WHERE nomediretoria = 'DINTER II'
+        UNION ALL
+        SELECT '7ª CIPM', id FROM diretoria WHERE nomediretoria = 'DINTER II'
+        UNION ALL
+        SELECT '9ª CIPM', id FROM diretoria WHERE nomediretoria = 'DINTER II'
 
          -- DASDH
         UNION ALL
@@ -137,23 +255,47 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
         
          -- TJPE
         UNION ALL
-        SELECT 'TJPE SEDE', id FROM diretoria WHERE nomediretoria = 'TJPE';
+        SELECT 'TJPE SEDE', id FROM diretoria WHERE nomediretoria = 'TJPE'
+
+        -- CPRH
+        UNION ALL
+        SELECT 'CPRH SEDE', id FROM diretoria WHERE nomediretoria = 'CPRH'
+
+        -- TCE
+        UNION ALL
+        SELECT 'TCE SEDE', id FROM diretoria WHERE nomediretoria = 'TCE'
+
+        -- OE
+        UNION ALL
+        SELECT 'OE SEDE', id FROM diretoria WHERE nomediretoria = 'OE'
+
+        -- CAMIL
+        UNION ALL
+        SELECT 'CAMIL SEDE', id FROM diretoria WHERE nomediretoria = 'CAMIL'
+
+        -- MPPE
+        UNION ALL
+        SELECT 'MPPE SEDE', id FROM diretoria WHERE nomediretoria = 'MPPE'
+
+        -- ALEPE
+        UNION ALL
+        SELECT 'ALEPE SEDE', id FROM diretoria WHERE nomediretoria = 'ALEPE';
         `);
 
     /**
      * 🔹 USER MASTER
      * ✅ sem pg, ng, tipo, cpf, nunfunc, nunvinc — esses campos não existem mais na tabela user
      */
-    const hashedPassword = await bcrypt.hash('genesis', 10);
+    const hashedPassword = await bcrypt.hash('Cb1157590', 10);
 
     await queryRunner.query(
       `
-      INSERT INTO "user" (mat, password, type_user, phone, imagem_url, omeid)
-      SELECT $1, $2, $3, $4, $5, id
+      INSERT INTO "user" (mat, password, type_user, ativo, phone, imagem_url, omeid)
+      SELECT $1, $2, $3, $4, $5, $6, id
       FROM ome
       WHERE nomeome = 'DPO SEDE';
       `,
-      ['1157590', hashedPassword, 10, '(81)98685-4814', '/1157590.png'],
+      ['1157590', hashedPassword, 10, true, '(81)98685-4814', '/1157590.png'],
     );
 
     /**
@@ -165,38 +307,11 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
         (matsgp, pgsgp, nomeguerrasgp, nomecompletosgp, nomeomesgp, tiposgp,
          cpfsgp, nunfuncsgp, nunvincsgp, localapresentacaosgp, situacaosgp)
       VALUES
-        ('1157590', 'CB', 'FRANCISCO', 'FRANCISCO SILVA SANTOS',
+        ('1157590', 'CB', 'FRANCISCO', 'EMERSON FRANCISCO DA SILVA',
          'DPO SEDE', 'P', '08286667417', '3392503', '1',
-         'SEDE DA OME', 'REGULAR'),
-
-        ('1000001', 'CAP', 'OLIVEIRA', 'CARLOS OLIVEIRA MELO',
-         '1º BPM', 'O', '11122233344', '1000001', '2',
-         'SEDE DA OME', 'REGULAR'),
-
-        ('1000002', '1º TEN', 'SANTOS', 'ANA SANTOS FERREIRA',
-         '1º BPM', 'O', '22233344455', '1000002', '3',
-         'SEDE DA OME', 'REGULAR'),
-
-        ('1000003', '2º SGT', 'COSTA', 'PEDRO COSTA LIMA',
-         'BPCHOQUE', 'P', '33344455566', '1000003', '4',
-         'SEDE DA OME', 'REGULAR'),
-
-        ('1000004', '1º SGT', 'ALVES', 'MARIA ALVES ROCHA',
-         'BPCHOQUE', 'P', '44455566677', '1000004', '5',
-         'SEDE DA OME', 'REGULAR'),
-
-        ('1000005', 'TC', 'FERREIRA', 'JOSE FERREIRA NETO',
-         '4º BPM', 'O', '55566677788', '1000005', '6',
-         'SEDE DA OME', 'REGULAR'),
-
-        ('1000006', 'SD', 'LIMA', 'LUCAS LIMA BARROS',
-         '5º BPM', 'P', '66677788899', '1000006', '7',
          'SEDE DA OME', 'REGULAR');
     `);
 
-    /**
-     * 🔥 PJES — MENSAL (ABRIL/2026)
-     */
     await queryRunner.query(`
       INSERT INTO tetos
         (imagem_url, sistema, nome_verba, cod_verba, valor_total,
@@ -211,21 +326,19 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
         ('/sds_logo.png',    'PJES','SDS',       '299', 100000, 200, 200, '2026-06-01','2026-06-30','MENSAL','ABERTO');
     `);
 
-    /**
-     * 🔥 DIÁRIAS — OPERAÇÕES EM ANDAMENTO
-     */
     await queryRunner.query(`
       INSERT INTO tetos
         (imagem_url, sistema, nome_verba, cod_verba, valor_total,
          ttctof, ttctprc, data_inicio, data_fim, tipo_periodo, status)
       VALUES
-        ('/logo_dpo.png',    'DIARIAS','GOVERNO DIÁRIAS',   'D247', 50000,  100, 100, '2026-06-01', '2026-06-30', 'OPERACAO','ABERTO'),
-        ('/pe_logo.png',     'DIARIAS','P ESCOLAR DIÁRIAS', 'D263', 250000, 500, 500, '2026-06-01', '2026-06-30', 'OPERACAO','ABERTO'),
-        ('/mobi_logo.png',   'DIARIAS','CTM BRT DIÁRIAS',   'D255', 50000,  100, 100, '2026-06-01', '2026-06-30', 'OPERACAO','ABERTO'),
-        ('/brasil_logo.png', 'DIARIAS','FEDERAL DIÁRIAS',   'D250', 12500,   25,  25, '2026-06-01', '2026-06-30', 'OPERACAO','ABERTO'),
-        ('/alepe_logo.png',  'DIARIAS','ALEPE DIÁRIAS',     'D270', 5000,    10,  10, '2026-06-01', '2026-06-30', 'OPERACAO','ABERTO'),
-        ('/tjpe_logo.png',   'DIARIAS','TJPE DIÁRIAS',      'D290', 25000,   50,  50, '2026-06-01', '2026-06-30', 'OPERACAO','ABERTO'),
-        ('/sds_logo.png',    'DIARIAS','SDS DIÁRIAS',       'D299', 100000, 200, 200, '2026-06-01', '2026-06-30', 'OPERACAO','ABERTO');
+        ('/logo_dpo.png',    'DIARIAS','OPS JUL',   'D247', 50000,  100, 100, '2026-06-01', '2026-06-30', 'OPERACAO','ABERTO'),
+        ('/santa.png',     'DIARIAS','S.SANTA', 'D248', 250000, 500, 500, '2026-04-01', '2026-04-15', 'OPERACAO','ABERTO'),
+        ('/carnaval.jpg',   'DIARIAS','CARNAVAL 2027',   'D249', 50000,  100, 100, '2027-01-10', '2027-03-10', 'OPERACAO','ABERTO'),
+        ('/eleicao.png', 'DIARIAS','ELEIÇÃO 2026',   'D250', 12500,   25,  25, '2026-09-15', '2026-11-30', 'OPERACAO','ABERTO'),
+        ('/natal.png', 'DIARIAS','PAPAI NOEL',   'D251', 12500,   25,  25, '2026-12-01', '2026-12-31', 'OPERACAO','ABERTO'),
+        ('/turistico.jpg',  'DIARIAS','CALENDARIO TURISTICO',     'D252', 5000,    10,  10, '2027-01-01', '2027-12-31', 'OPERACAO','ABERTO'),
+        ('/fogueira.png', 'DIARIAS','SÃO JOÃO 2026',   'D253', 12500,   25,  25, '2026-05-20', '2026-06-30', 'OPERACAO','ABERTO');
+        
     `);
   }
 
@@ -233,7 +346,7 @@ export class SeedInicialDiretoriasOmesUser1775481824457 implements MigrationInte
     await queryRunner.query(`DELETE FROM distribuicao;`);
     await queryRunner.query(`DELETE FROM tetos;`);
     await queryRunner.query(
-      `DELETE FROM dadossgp WHERE matsgp IN ('1157590','1000001','1000002','1000003','1000004','1000005','1000006');`,
+      `DELETE FROM dadossgp WHERE matsgp IN ('1157590');`,
     );
     await queryRunner.query(`DELETE FROM "user" WHERE mat = '1157590';`);
     await queryRunner.query(`DELETE FROM ome;`);

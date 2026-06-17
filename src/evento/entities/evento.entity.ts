@@ -31,6 +31,9 @@ export class Evento {
   @Column({ type: 'varchar', length: 100 })
   ne!: string;
 
+  @Column({ type: 'boolean', default: false })
+  bloqueado!: boolean;
+
   @Column({ type: 'int' })
   qtd_of_evento!: number;
 

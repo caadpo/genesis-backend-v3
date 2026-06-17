@@ -43,9 +43,9 @@ export class CreateDadossgpTable1775481824160 implements MigrationInterface {
       true,
     );
 
-    // ✅ índice para busca por matrícula (join frequente com user)
+    // ✅ índice ÚNICO para busca por matrícula (join frequente com user)
     await queryRunner.query(
-      `CREATE INDEX "IDX_dadossgp_matsgp" ON "dadossgp" ("matsgp")`,
+      `CREATE UNIQUE INDEX "IDX_dadossgp_matsgp" ON "dadossgp" ("matsgp")`,
     );
 
     // ✅ índice para busca por nome de guerra

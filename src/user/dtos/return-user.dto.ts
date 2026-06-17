@@ -15,6 +15,7 @@ export class ReturnUserDto {
   nunfunc: string;
   nunvinc: string;
   typeUser: UserType;
+  ativo: boolean;
   ome?: ReturnOmeDto;
   conta?: ReturnContaDto;
 
@@ -31,7 +32,7 @@ export class ReturnUserDto {
     this.nunfunc = userEntity.nunfunc;
     this.nunvinc = userEntity.nunvinc;
     this.typeUser = userEntity.typeUser;
-
+    this.ativo = userEntity.ativo ?? false;
     this.ome = userEntity.ome ? new ReturnOmeDto(userEntity.ome) : undefined;
     this.conta = userEntity.conta
       ? new ReturnContaDto(userEntity.conta)

@@ -90,6 +90,12 @@ export class CreateEventoTable1775481824057 implements MigrationInterface {
           },
 
           {
+            name: 'bloqueado',
+            type: 'boolean',
+            default: false,
+          },
+
+          {
             name: 'created_at',
             type: 'timestamp',
             default: 'now()',

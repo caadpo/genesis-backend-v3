@@ -23,7 +23,7 @@ import { DadosSgpEntity } from 'src/dadossgp/entities/dadossgp.entity';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '4h' },
+        signOptions: { expiresIn: '2h' },
       }),
     }),
   ],

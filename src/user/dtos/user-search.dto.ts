@@ -2,9 +2,10 @@ export class UserSearchDto {
   id!: number;
   mat!: string;
   phone?: string;
+  ativo?: string;
   typeUser!: number;
   imagemUrl?: string;
-  // ✅ agora vêm do SGP
+  //agora vêm do SGP
   pg!: string;
   nomeGuerra!: string;
   tipo!: string;

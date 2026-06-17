@@ -22,6 +22,13 @@ export class AuthService {
       throw new UnauthorizedException('Login ou senha inválidos');
     }
 
+    // ✅ bloqueia login se usuário estiver inativo
+    if (!user.ativo) {
+      throw new UnauthorizedException(
+        'Usuário inativo. Solicite a ativação a sua P1.',
+      );
+    }
+
     const isMatch = await validatePassword(loginDto.password, user.password);
 
     if (!isMatch) {

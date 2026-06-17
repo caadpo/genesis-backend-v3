@@ -43,7 +43,7 @@ export class ReturnEventoComEscalasDto {
   created_at!: Date;
   updated_at!: Date;
 
-  ome!: { id: number; nomeOme: string };
+  ome!: { id: number; nomeOme: string; efisco: string };
   teto!: { id: number; nome_verba: string; sistema: string };
 
   totalCotasOficiais!: number;

@@ -42,6 +42,36 @@ export class UserService {
     throw error;
   }
 
+  async toggleAtivo(
+    targetId: number,
+    usuarioLogado: { id: number; typeUser: number; omeId: number },
+  ): Promise<{ ativo: boolean }> {
+    const isMasterOuTecnico =
+      Number(usuarioLogado.typeUser) === UserType.MASTER ||
+      Number(usuarioLogado.typeUser) === UserType.TECNICO;
+    const isAuxiliar = Number(usuarioLogado.typeUser) === UserType.AUXILIAR;
+
+    if (!isMasterOuTecnico && !isAuxiliar) {
+      throw new ForbiddenException(
+        'Sem permissão para alterar status do usuário',
+      );
+    }
+
+    const target = await this.findById(targetId);
+
+    // AUXILIAR só pode ativar/inativar usuários da sua OME
+    if (isAuxiliar && target.omeId !== usuarioLogado.omeId) {
+      throw new ForbiddenException(
+        'Auxiliar só pode alterar usuários da sua OME',
+      );
+    }
+
+    target.ativo = !target.ativo;
+    await this.userRepository.save(target);
+
+    return { ativo: target.ativo };
+  }
+
   async findByMatOrNomeGuerra(q: string): Promise<UserSearchDto | null> {
     const isNumber = /^\d+$/.test(q);
 
@@ -55,6 +85,7 @@ export class UserService {
         'u.imagem_url  AS "imagemUrl"',
         'u.mat         AS mat',
         'u.phone       AS phone',
+        'u.ativo       AS ativo',
         'u.type_user   AS "typeUser"',
         'dsgp.pgsgp         AS pg',
         'dsgp.nomeguerrasgp AS "nomeGuerra"',
@@ -89,6 +120,7 @@ export class UserService {
       imagemUrl: raw.imagemUrl,
       mat: raw.mat,
       phone: raw.phone,
+      ativo: raw.ativo,
       typeUser: raw.typeUser,
       pg: raw.pg,
       nomeGuerra: raw.nomeGuerra,

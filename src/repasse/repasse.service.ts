@@ -377,16 +377,22 @@ export class RepasseService {
       .andWhere('r.tipo_escala_repasse = :tipo', { tipo: tipoEscala })
       .andWhere('r.ofertante_id != :userId', { userId: usuarioLogado.id })
       .andWhere('evento.ome_id = :omeId', { omeId: usuarioLogado.omeId })
+      // ✅ Não mostra repasses cuja data+hora de início já passou
+      .andWhere(
+        `(r.data_inicio_repasse::text || ' ' || r.hora_inicio_repasse::text)::timestamp > NOW()`,
+      )
       .andWhere(
         `NOT EXISTS (
-    SELECT 1 FROM escala e
-    WHERE e.mat_escala = :mat
-      AND e.data_inicio = r.data_inicio_repasse
-      AND e.sistema = r.sistema_repasse::escala_sistema_enum
-  )`,
+SELECT 1 FROM escala e
+WHERE e.mat_escala = :mat
+  AND e.data_inicio = r.data_inicio_repasse
+  AND e.sistema = r.sistema_repasse::escala_sistema_enum
+)`,
         { mat: usuarioLogado.mat },
       )
-      .orderBy('r.created_at', 'DESC') // Changed to most recent first
+      // ✅ Ordena pela data/hora mais próxima primeiro
+      .orderBy('r.data_inicio_repasse', 'ASC')
+      .addOrderBy('r.hora_inicio_repasse', 'ASC')
       .getMany();
 
     // Fetch SGP data for each repasse

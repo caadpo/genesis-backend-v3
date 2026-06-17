@@ -86,6 +86,12 @@ export class EventoController {
     res.end(buffer);
   }
 
+  @Patch(':id/bloqueio')
+  @Roles(UserType.MASTER, UserType.TECNICO)
+  toggleBloqueio(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.service.toggleBloqueio(id, req.user as UserEntity);
+  }
+
   @Post()
   @Roles(
     UserType.MASTER,
@@ -103,6 +109,8 @@ export class EventoController {
     UserType.TECNICO,
     UserType.DIRETOR,
     UserType.AUXILIAR,
+    UserType.FINANCEIRO,
+    UserType.PD,
     UserType.GESTOR_VERBA,
   )
   findAll(

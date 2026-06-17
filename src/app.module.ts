@@ -13,12 +13,12 @@ import { DistribuicaoModule } from './distribuicao/distribuicao.module';
 import { EventoModule } from './evento/evento.module';
 import { OperacaoModule } from './operacao/operacao.module';
 import { ContaModule } from './conta/conta.module';
-import { DadossgpModule } from './dadossgp/dadossgp.module';
 import { ConfigModule } from '@nestjs/config';
 import { EscalaModule } from './escala/escala.module';
 import { PagamentoModule } from './pagamento/pagamento.module';
 import { RepasseModule } from './repasse/repasse.module';
 import { ViaturaModule } from './viatura/viatura.module';
+import { DadosSgpModule } from './dadossgp/dadossgp.module';
 
 @Module({
   imports: [
@@ -63,7 +63,7 @@ import { ViaturaModule } from './viatura/viatura.module';
     EventoModule,
     OperacaoModule,
     ContaModule,
-    DadossgpModule,
+    DadosSgpModule,
     EscalaModule,
     PagamentoModule,
     RepasseModule,

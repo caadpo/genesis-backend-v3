@@ -28,6 +28,9 @@ export class UserEntity {
   @Column({ name: 'password', nullable: false })
   password!: string;
 
+  @Column({ name: 'ativo', type: 'boolean', default: false })
+  ativo!: boolean;
+
   @Column({ name: 'omeid', nullable: false })
   omeId!: number;
 

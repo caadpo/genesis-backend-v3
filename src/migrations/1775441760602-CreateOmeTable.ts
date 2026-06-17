@@ -23,6 +23,12 @@ export class CreateOmeTable1775441760602 implements MigrationInterface {
             isNullable: false,
           },
           {
+            name: 'efisco',
+            type: 'varchar',
+            length: '20',
+            isNullable: true,
+          },
+          {
             name: 'diretoriaid',
             type: 'integer',
             isNullable: false,

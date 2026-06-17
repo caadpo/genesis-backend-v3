@@ -186,8 +186,13 @@ export class EscalaService {
     }
   }
 
-  private calcularCota(horaInicio: string, horaFim: string): number {
-    return horaInicio === horaFim ? 2 : 1;
+  private calcularCota(
+    horaInicio: string,
+    horaFim: string,
+    sistema: string,
+  ): number {
+    if (sistema === 'PJES' && horaInicio === horaFim) return 2;
+    return 1;
   }
 
   private async verificarConflito(
@@ -488,7 +493,7 @@ export class EscalaService {
       this.verificarViatura(dto.viaturaId, dto.funcao, dto.operacaoId),
     ]);
 
-    const cota = this.calcularCota(dto.horaInicio, dto.horaFim);
+    const cota = this.calcularCota(dto.horaInicio, dto.horaFim, dto.sistema);
 
     await Promise.all([
       this.verificarConflito(sgp.matSgp, dto.dataInicio, dto.sistema),
@@ -588,7 +593,11 @@ export class EscalaService {
     const novaHoraInicio = dto.horaInicio ?? escala.horaInicio;
     const novaHoraFim = dto.horaFim ?? escala.horaFim;
     const novaTipo = escala.tipo_escala;
-    const novaCota = this.calcularCota(novaHoraInicio, novaHoraFim);
+    const novaCota = this.calcularCota(
+      novaHoraInicio,
+      novaHoraFim,
+      novaSistema,
+    );
 
     await Promise.all([
       this.verificarConflito(novaMatEscala, novaData, novaSistema, id),
@@ -650,6 +659,38 @@ export class EscalaService {
 
     const dtos = escalas.map((e) => new ReturnEscalaDto(e));
     return new ReturnEscalaOperacaoDto(dtos);
+  }
+
+  async findByCodOp(codOp: string): Promise<ReturnEscalaDto[]> {
+    const escalas = await this.repo
+      .createQueryBuilder('e')
+      .leftJoinAndSelect('e.viatura', 'viatura')
+      .leftJoinAndSelect('e.usuario', 'usuario')
+      .leftJoinAndSelect('e.conta', 'conta')
+      .leftJoinAndSelect('e.operacao', 'operacao')
+      .leftJoinAndSelect('operacao.evento', 'evento')
+      .leftJoinAndSelect('evento.ome', 'ome')
+      .where('operacao.cod_op = :codOp', { codOp })
+      .orderBy('e.data_inicio', 'ASC')
+      .addOrderBy('e.hora_inicio', 'ASC')
+      .addOrderBy(
+        `
+      CASE e.funcao
+        WHEN 'FISCAL' THEN 1
+        WHEN 'CMT'    THEN 2
+        WHEN 'MOT'    THEN 3
+        WHEN 'PAT'    THEN 4
+        ELSE               5
+      END
+    `,
+      )
+      .getMany();
+
+    if (!escalas.length) {
+      throw new NotFoundException('Nenhuma escala encontrada para este COP');
+    }
+
+    return escalas.map((e) => new ReturnEscalaDto(e));
   }
 
   async generatePdf(

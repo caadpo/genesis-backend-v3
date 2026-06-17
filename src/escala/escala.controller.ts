@@ -70,6 +70,21 @@ export class EscalaController {
     return this.service.findByOperacao(Number(operacaoId));
   }
 
+  @Get('cod-op/:codOp')
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.AUXILIAR,
+    UserType.DIRETOR,
+    UserType.ESTRATEGICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.COMUN,
+  )
+  findByCodOp(@Param('codOp') codOp: string) {
+    return this.service.findByCodOp(codOp);
+  }
+
   @Get('pdf')
   @Roles(
     UserType.MASTER,

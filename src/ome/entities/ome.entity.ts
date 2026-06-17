@@ -19,6 +19,9 @@ export class OmeEntity {
   @Column({ name: 'nomeome', nullable: false })
   nomeOme!: string;
 
+  @Column({ name: 'efisco' })
+  efisco!: string;
+
   @Column({ name: 'diretoriaid', nullable: false })
   diretoriaId!: number;
 

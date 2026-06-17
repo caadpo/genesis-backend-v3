@@ -31,7 +31,7 @@ CINZA_BORDA = colors.HexColor('#BDBDBD')
 # =============================================================================
 
 PAGE_W, PAGE_H = landscape(A4)
-MARGIN = 1 * cm
+MARGIN = 0.5 * cm
 
 # =============================================================================
 # HELPERS
@@ -76,6 +76,7 @@ def fmt_dt(val) -> str:
 def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
 
     nome_evento     = payload.get('nome_evento', '')
+    ne              = payload.get('ne', '')
     qtd_of          = payload.get('qtd_of_evento', 0)
     qtd_prc         = payload.get('qtd_prc_evento', 0)
     status          = payload.get('status_evento', '')
@@ -86,7 +87,7 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
     usuarios        = payload.get('usuarios', [])
     sistema         = (teto.get('sistema') or '').upper().strip()
 
-    criado_por   = payload.get('criado_por')   or '-'
+    # criado_por   = payload.get('criado_por')   or '-'
     homologado_por = payload.get('homologado_por') or '-'
     homologado_em  = payload.get('homologado_em')
     pago_por     = payload.get('pago_por')     or '-'
@@ -262,10 +263,10 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
     # TÍTULO
     # =========================================================================
 
-    titulo_esq = Paragraph(f"{teto.get('sistema','')} | {teto.get('nome_verba','')} - {ome.get('nomeOme', '')} : {nome_evento}",s_sect),
+    titulo_esq = Paragraph(f"{teto.get('sistema','')} | {teto.get('nome_verba','')} - {ome.get('nomeOme', '')} (E-Fisco: {ome.get('efisco', '')}) : {nome_evento} ( NE: {ne} )",s_sect),
     titulo_vlr = Paragraph(f"Valor: {fmt_brl(valor_total_geral)}",s_sect),
-    criado = Paragraph(f"<b>Criado por:</b> {criado_por}", s_info),
-    homologado = Paragraph(f"<b>Homologado por:</b> {homologado_por} ({fmt_dt(homologado_em)})",s_info),
+    # criado = Paragraph(f"<b>Criado por:</b> {criado_por}", s_info),
+    homologado = Paragraph(f"<b>Homologado por:</b> {homologado_por} em {fmt_dt(homologado_em)}",s_info),
     pago = Paragraph(f"<b>Pago por:</b> {pago_por} ({fmt_dt(pago_em)})",s_info),
 
     titulo_dir = Paragraph(
@@ -284,7 +285,7 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
     [
         [titulo_esq],
         [titulo_vlr],
-        [criado],
+        #[criado],
         [homologado],
         [pago]
     ],
@@ -355,14 +356,14 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
     col_widths = [
         usable_w * 0.03,   # #
         usable_w * 0.07,   # MAT
-        usable_w * 0.20,   # NOME
-        usable_w * 0.14,   # OME
+        usable_w * 0.29,   # NOME
+        usable_w * 0.09,   # OME
         usable_w * 0.04,   # TIPO
         usable_w * 0.05,   # COTAS
         usable_w * 0.09,   # VALOR
         usable_w * 0.09,   # BANCO
         usable_w * 0.07,   # AGÊNCIA
-        usable_w * 0.13,   # CONTA
+        usable_w * 0.09,   # CONTA
         usable_w * 0.09,   # CPF
     ]
 

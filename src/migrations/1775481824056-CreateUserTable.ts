@@ -12,11 +12,10 @@ export class CreateUserTable1775481824056 implements MigrationInterface {
         name: 'user',
         columns: [
           { name: 'id', type: 'serial', isPrimary: true },
-
           { name: 'mat', type: 'varchar', isNullable: false },
           { name: 'password', type: 'varchar', isNullable: false },
+          { name: 'ativo', type: 'boolean', default: false },
           { name: 'type_user', type: 'smallint', isNullable: false },
-
           { name: 'phone', type: 'varchar', isNullable: true },
           { name: 'omeid', type: 'integer', isNullable: false },
           { name: 'imagem_url', type: 'varchar', isNullable: true },

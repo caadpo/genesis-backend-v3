@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { DadosSgpEntity } from './entities/dadossgp.entity';
 import { DadosSgpService } from './dadossgp.service';
 import { DadosSgpController } from './dadossgp.controller';
-import { DadosSgpEntity } from './entities/dadossgp.entity';
-import { TypeOrmModule } from '@nestjs/typeorm';
 
 @Module({
   imports: [TypeOrmModule.forFeature([DadosSgpEntity])],
@@ -10,4 +10,4 @@ import { TypeOrmModule } from '@nestjs/typeorm';
   controllers: [DadosSgpController],
   exports: [DadosSgpService],
 })
-export class DadossgpModule {}
+export class DadosSgpModule {}

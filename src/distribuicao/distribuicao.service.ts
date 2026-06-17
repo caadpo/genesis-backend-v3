@@ -434,6 +434,22 @@ export class DistribuicaoService {
       distribuicao.qtd_dist_of = novoOf;
       distribuicao.qtd_dist_prc = novoPrc;
 
+      if (dto.nome_dist !== undefined) {
+        distribuicao.nome_dist = dto.nome_dist;
+      }
+
+      if (dto.diretoria_id !== undefined) {
+        const diretoriaExiste = await manager.exists(DiretoriaEntity, {
+          where: { id: dto.diretoria_id },
+        });
+
+        if (!diretoriaExiste) {
+          throw new NotFoundException('Diretoria não encontrada');
+        }
+
+        distribuicao.diretoria = { id: dto.diretoria_id } as DiretoriaEntity;
+      }
+
       return manager.save(distribuicao);
     });
   }

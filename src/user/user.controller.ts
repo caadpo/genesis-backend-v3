@@ -9,6 +9,7 @@ import {
   UseGuards,
   Query,
   Request,
+  Patch,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UserEntity } from './entities/user.entity';
@@ -31,6 +32,12 @@ export class UserController {
   @Roles(UserType.MASTER)
   async createUser(@Body() dto: CreateUserDto): Promise<UserEntity> {
     return this.userService.createUser(dto);
+  }
+
+  @Patch(':id/ativo')
+  @Roles(UserType.MASTER, UserType.TECNICO, UserType.AUXILIAR)
+  async toggleAtivo(@Param('id') id: number, @Request() req: any) {
+    return this.userService.toggleAtivo(id, req.user);
   }
 
   @Get('search')

@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -146,6 +147,7 @@ export class EventoService {
       nomeGuerra: r.nomeGuerra ?? '-',
       nomeCompleto: r.nomeCompleto ?? '-',
       nomeOme: r.nomeOme ?? '-',
+      efisco: r.efisco ?? '-',
       phone: r.phone ?? '-',
       cpf: r.cpf ?? '-',
       tipo: r.tipo ?? '-',
@@ -187,7 +189,11 @@ export class EventoService {
 
       created_at: evento.created_at,
       updated_at: evento.updated_at,
-      ome: { id: evento.ome.id, nomeOme: evento.ome.nomeOme },
+      ome: {
+        id: evento.ome.id,
+        nomeOme: evento.ome.nomeOme,
+        efisco: evento.ome.efisco,
+      },
       teto: {
         id: teto?.id ?? 0,
         nome_verba: teto?.nome_verba ?? '',
@@ -440,6 +446,22 @@ export class EventoService {
     }
   }
 
+  async toggleBloqueio(id: number, user: UserEntity): Promise<ReturnEventoDto> {
+    const evento = await this.findOneEntity(id);
+
+    const isAdmin = Number(user.typeUser) === 9 || Number(user.typeUser) === 10;
+    if (!isAdmin) {
+      throw new ForbiddenException(
+        'Apenas Técnico ou Master podem bloquear/desbloquear o evento',
+      );
+    }
+
+    evento.bloqueado = !evento.bloqueado;
+    await this.eventoRepo.save(evento);
+
+    return this.findOne(id);
+  }
+
   async create(
     dto: CreateEventoDto,
     user: UserEntity,
@@ -590,6 +612,14 @@ export class EventoService {
   async update(id: number, dto: UpdateEventoDto, user: UserEntity) {
     const evento = await this.findOneEntity(id);
     this.validarPermissaoDiretoria(evento, user);
+
+    // ✅ Se o evento está bloqueado, apenas TECNICO/MASTER podem editar
+    const isAdmin = Number(user.typeUser) === 9 || Number(user.typeUser) === 10;
+    if (evento.bloqueado && !isAdmin) {
+      throw new ForbiddenException(
+        'Este evento está bloqueado para edição. Apenas Técnico ou Master podem alterá-lo.',
+      );
+    }
 
     const novoOf = dto.qtd_of_evento ?? evento.qtd_of_evento;
     const novoPrc = dto.qtd_prc_evento ?? evento.qtd_prc_evento;

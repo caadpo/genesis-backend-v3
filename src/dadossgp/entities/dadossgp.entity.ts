@@ -1,6 +1,7 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, Index } from 'typeorm';
 
 @Entity({ name: 'dadossgp' })
+@Index(['matSgp'], { unique: true })
 export class DadosSgpEntity {
   @PrimaryGeneratedColumn()
   id!: number;
