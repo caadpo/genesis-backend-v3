@@ -102,8 +102,10 @@ export class UserService {
         // Conta
         'conta.id      AS "conta.id"',
         'conta.banco   AS "conta.banco"',
+        'conta.cod_banco   AS "conta.cod_banco"',
         'conta.agencia AS "conta.agencia"',
         'conta.conta   AS "conta.conta"',
+        'conta.dig_conta   AS "conta.dig_conta"',
       ]);
 
     if (isNumber) {
@@ -138,8 +140,10 @@ export class UserService {
         ? {
             id: raw['conta.id'],
             banco: raw['conta.banco'],
+            cod_banco: raw['conta.cod_banco'],
             agencia: raw['conta.agencia'],
             conta: raw['conta.conta'],
+            dig_conta: raw['conta.dig_conta'],
           }
         : undefined,
     };

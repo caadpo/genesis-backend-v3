@@ -110,8 +110,10 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
                 'nomeOme':     u.get('nomeOme')      or '-',
                 'tipo':        (u.get('tipo') or '-').upper().strip(),
                 'banco':       u.get('banco')        or '-',
+                'cod_banco':   u.get('cod_banco')    or '-',
                 'agencia':     u.get('agencia')      or '-',
                 'conta':       u.get('conta')        or '-',
+                'dig_conta':   u.get('dig_conta')    or '-',
                 'cpf':         u.get('cpf')          or '-',
                 'totalCotas':  0,
             }
@@ -348,22 +350,26 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
         'COTAS',
         'VALOR',
         'BANCO',
+        'COD',
         'AGÊNCIA',
         'CONTA',
+        'DIG',
         'CPF',
     ]
 
     col_widths = [
         usable_w * 0.03,   # #
-        usable_w * 0.07,   # MAT
-        usable_w * 0.29,   # NOME
+        usable_w * 0.06,   # MAT
+        usable_w * 0.24,   # NOME
         usable_w * 0.09,   # OME
         usable_w * 0.04,   # TIPO
         usable_w * 0.05,   # COTAS
         usable_w * 0.09,   # VALOR
         usable_w * 0.09,   # BANCO
-        usable_w * 0.07,   # AGÊNCIA
-        usable_w * 0.09,   # CONTA
+        usable_w * 0.06,   # COD
+        usable_w * 0.06,   # AGÊNCIA
+        usable_w * 0.06,   # CONTA
+        usable_w * 0.03,   # DIG
         usable_w * 0.09,   # CPF
     ]
 
@@ -383,8 +389,10 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
             Paragraph(str(cotas),           s_center),
             Paragraph(fmt_brl(valor),       s_center),
             Paragraph(u['banco'],           s_center),
+            Paragraph(u['cod_banco'],       s_center),
             Paragraph(u['agencia'],         s_center),
             Paragraph(u['conta'],           s_center),
+            Paragraph(u['dig_conta'],       s_center),
             Paragraph(u['cpf'],             s_center),
         ])
 

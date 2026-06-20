@@ -14,6 +14,10 @@ export class CreateEventoDto {
   @IsOptional()
   ne?: string;
 
+  @IsString()
+  @IsOptional()
+  dh?: string;
+
   @IsInt()
   qtd_of_evento!: number;
 

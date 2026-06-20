@@ -3,8 +3,10 @@ import { ContaEntity } from '../entities/conta.entity';
 export class ReturnContaDto {
   id: number;
   banco: string;
+  cod_banco: string;
   agencia: string;
   conta: string;
+  dig_conta: string;
   createdAt: Date;
   updatedAt: Date;
 
@@ -21,8 +23,10 @@ export class ReturnContaDto {
   constructor(conta: ContaEntity) {
     this.id = conta.id;
     this.banco = conta.banco;
+    this.cod_banco = conta.cod_banco;
     this.agencia = conta.agencia;
     this.conta = conta.conta;
+    this.dig_conta = conta.dig_conta;
     this.createdAt = conta.createdAt;
     this.updatedAt = conta.updatedAt;
 

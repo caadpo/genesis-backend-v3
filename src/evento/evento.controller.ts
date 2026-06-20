@@ -10,6 +10,7 @@ import {
   UseGuards,
   Req,
   Res,
+  BadRequestException,
 } from '@nestjs/common';
 import { Query } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
@@ -80,6 +81,27 @@ export class EventoController {
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+
+    res.end(buffer);
+  }
+
+  @Get(':id/xls-pd')
+  @Roles(UserType.MASTER, UserType.TECNICO, UserType.FINANCEIRO)
+  async downloadXlsPd(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('dh') dh: string,
+    @Res() res: any,
+  ): Promise<void> {
+    if (!dh) throw new BadRequestException('Informe o número do DH');
+
+    const { buffer, nomeArquivo } = await this.service.gerarXlsPd(id, dh);
+
+    res.set({
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${nomeArquivo}.xlsx"`,
       'Content-Length': buffer.length,
     });
 

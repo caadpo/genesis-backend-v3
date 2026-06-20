@@ -31,6 +31,9 @@ export class Evento {
   @Column({ type: 'varchar', length: 100 })
   ne!: string;
 
+  @Column({ type: 'varchar', length: 100 })
+  dh!: string;
+
   @Column({ type: 'boolean', default: false })
   bloqueado!: boolean;
 

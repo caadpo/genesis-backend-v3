@@ -11,6 +11,8 @@ export class ReturnPagamentoDto {
   banco_pagamento: string;
   agencia_pagamento: string;
   conta_pagamento: string;
+  comentario_pagamento: string;
+  pgtrue: boolean;
   sistema: string;
   nome_verba: string;
   total_cotas: number;
@@ -31,6 +33,8 @@ export class ReturnPagamentoDto {
     this.banco_pagamento = p.banco_pagamento;
     this.agencia_pagamento = p.agencia_pagamento;
     this.conta_pagamento = p.conta_pagamento;
+    this.comentario_pagamento = p.comentario_pagamento;
+    this.pgtrue = p.pgtrue;
     this.sistema = p.sistema;
     this.nome_verba = p.nome_verba;
     this.total_cotas = p.total_cotas;

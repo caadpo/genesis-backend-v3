@@ -21,6 +21,13 @@ export class CreatePagamentoTable1775481824610 implements MigrationInterface {
           { name: 'banco_pagamento', type: 'varchar', isNullable: false },
           { name: 'agencia_pagamento', type: 'varchar', isNullable: false },
           { name: 'conta_pagamento', type: 'varchar', isNullable: false },
+          { name: 'comentario_pagamento', type: 'varchar' },
+          {
+            name: 'pgtrue',
+            type: 'boolean',
+            isNullable: false,
+            default: false,
+          },
           { name: 'sistema', type: 'varchar', isNullable: false },
           { name: 'nome_verba', type: 'varchar', isNullable: false },
           { name: 'total_cotas', type: 'integer', isNullable: false },

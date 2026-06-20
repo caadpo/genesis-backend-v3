@@ -8,9 +8,17 @@ export class UpdateContaDto {
 
   @IsOptional()
   @IsString()
+  cod_banco?: string;
+
+  @IsOptional()
+  @IsString()
   agencia?: string;
 
   @IsOptional()
   @IsString()
   conta?: string;
+
+  @IsOptional()
+  @IsString()
+  dig_conta?: string;
 }

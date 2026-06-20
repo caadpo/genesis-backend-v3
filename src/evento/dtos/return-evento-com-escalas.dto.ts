@@ -11,8 +11,10 @@ export class UsuarioResumoEscalaDto {
   nunfunc!: string;
   nunvinc!: string;
   banco!: string;
+  cod_banco!: string;
   agencia!: string;
   conta!: string;
+  dig_conta!: string;
   totalCotas!: number;
 }
 
@@ -20,6 +22,7 @@ export class ReturnEventoComEscalasDto {
   id!: number;
   nome_evento!: string;
   ne!: string;
+  dh!: string;
   qtd_of_evento!: number;
   qtd_prc_evento!: number;
   status_evento!: string;

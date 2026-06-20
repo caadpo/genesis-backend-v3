@@ -47,7 +47,7 @@ export class EscalaEntity {
   tipo_escala!: string; //O ou P
 
   @Column({ type: 'varchar', name: 'cpf_escala' })
-  cpf_escala!: string; //08289997612
+  cpf_escala!: string;
 
   @Column({ type: 'varchar', name: 'nomecompleto_escala' })
   nomecompleto_escala!: string; //EMERSON FRANCISCO DA SILVA

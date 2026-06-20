@@ -5,6 +5,9 @@ import {
   Param,
   ParseIntPipe,
   UseGuards,
+  Query,
+  Patch,
+  Body,
 } from '@nestjs/common';
 import { PagamentoService } from './pagamento.service';
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
@@ -36,6 +39,54 @@ export class PagamentoController {
   )
   findByEvento(@Param('eventoId', ParseIntPipe) eventoId: number) {
     return this.service.findByEvento(eventoId);
+  }
+
+  @Get('eventos')
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.DIRETOR,
+    UserType.ESTRATEGICO,
+    UserType.AUXILIAR,
+    UserType.COMUN,
+  )
+  findEventosPagos(@Query('limit') limit?: string) {
+    return this.service.findEventosPagos(limit ? Number(limit) : undefined);
+  }
+
+  @Get('evento/:eventoId/paginado')
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.DIRETOR,
+  )
+  findByEventoPaginado(
+    @Param('eventoId', ParseIntPipe) eventoId: number,
+    @Query('page') page?: string,
+    @Query('busca') busca?: string,
+  ) {
+    return this.service.findByEventoPaginado(
+      eventoId,
+      page ? Number(page) : 1,
+      busca,
+    );
+  }
+
+  @Patch(':id')
+  @Roles(UserType.MASTER, UserType.TECNICO, UserType.FINANCEIRO)
+  atualizarPagamento(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { pgtrue: boolean; comentario_pagamento: string },
+  ) {
+    return this.service.atualizarPagamento(
+      id,
+      body.pgtrue,
+      body.comentario_pagamento,
+    );
   }
 
   // ✅ Lista todos os pagamentos

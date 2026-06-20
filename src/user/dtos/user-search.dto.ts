@@ -24,7 +24,9 @@ export class UserSearchDto {
   conta?: {
     id: number;
     banco: string;
+    cod_banco: string;
     agencia: string;
     conta: string;
+    dig_conta: string;
   };
 }

@@ -43,9 +43,6 @@ export class ContaService {
   }
 
   async criar(dto: CreateContaDto, user: UserEntity) {
-    // 🔒 Regra 1: tipos permitidos
-
-    // 🔍 Buscar usuário alvo (quem vai receber a conta)
     const usuarioAlvo = await this.userRepo.findOne({
       where: { id: dto.usuarioId },
     });
@@ -86,8 +83,10 @@ export class ContaService {
     return {
       id: conta.id,
       banco: conta.banco,
+      cod_banco: conta.cod_banco,
       agencia: conta.agencia,
       conta: conta.conta,
+      dig_conta: conta.dig_conta,
       createdAt: conta.createdAt,
       updatedAt: conta.updatedAt,
 

@@ -5,6 +5,7 @@ export class ReturnEventoDto {
   id: number;
   nome_evento: string;
   ne: string;
+  dh: string;
   qtd_of_evento: number;
   qtd_prc_evento: number;
   status_evento: string;
@@ -20,6 +21,7 @@ export class ReturnEventoDto {
     this.id = evento.id;
     this.nome_evento = evento.nome_evento;
     this.ne = evento.ne;
+    this.dh = evento.dh;
     this.qtd_of_evento = evento.qtd_of_evento;
     this.qtd_prc_evento = evento.qtd_prc_evento;
     this.status_evento = evento.status_evento;

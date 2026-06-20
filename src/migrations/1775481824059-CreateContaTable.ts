@@ -28,6 +28,14 @@ export class CreateContaTable1775481824059 implements MigrationInterface {
             length: '120',
             isNullable: false,
           },
+
+          {
+            name: 'cod_banco',
+            type: 'varchar',
+            length: '120',
+            isNullable: false,
+          },
+
           {
             name: 'agencia',
             type: 'varchar',
@@ -36,6 +44,13 @@ export class CreateContaTable1775481824059 implements MigrationInterface {
           },
           {
             name: 'conta',
+            type: 'varchar',
+            length: '30',
+            isNullable: false,
+          },
+
+          {
+            name: 'dig_conta',
             type: 'varchar',
             length: '30',
             isNullable: false,

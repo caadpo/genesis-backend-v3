@@ -32,6 +32,7 @@ import { tmpdir } from 'os';
 import { promisify } from 'util';
 import { execFile } from 'child_process';
 const execFileAsync = promisify(execFile);
+import ExcelJS from 'exceljs';
 
 @Injectable()
 export class EventoService {
@@ -86,8 +87,10 @@ export class EventoService {
       .addSelect('e.nunfunc_escala', 'nunfunc')
       .addSelect('e.nunvinc_escala', 'nunvinc')
       .addSelect('c.banco', 'banco')
+      .addSelect('c.cod_banco', 'cod_banco')
       .addSelect('c.agencia', 'agencia')
       .addSelect('c.conta', 'conta')
+      .addSelect('c.dig_conta', 'dig_conta')
       .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'totalCotas')
       .innerJoin('e.operacao', 'op')
       .innerJoin('op.evento', 'ev')
@@ -105,8 +108,10 @@ export class EventoService {
       .addGroupBy('e.nunfunc_escala')
       .addGroupBy('e.nunvinc_escala')
       .addGroupBy('c.banco')
+      .addGroupBy('c.cod_banco')
       .addGroupBy('c.agencia')
       .addGroupBy('c.conta')
+      .addGroupBy('c.dig_conta')
       .orderBy('e.nomeome_escala', 'ASC')
       .addOrderBy('e.pg_escala', 'ASC')
       .addOrderBy('e.nomecompleto_escala', 'ASC')
@@ -154,8 +159,10 @@ export class EventoService {
       nunfunc: r.nunfunc ?? '-',
       nunvinc: r.nunvinc ?? '-',
       banco: r.banco ?? '-',
+      cod_banco: r.cod_banco ?? '-',
       agencia: r.agencia ?? '-',
       conta: r.conta ?? '-',
+      dig_conta: r.dig_conta ?? '-',
       totalCotas: Number(r.totalCotas),
     }));
 
@@ -165,6 +172,7 @@ export class EventoService {
       id: evento.id,
       nome_evento: evento.nome_evento,
       ne: evento.ne ?? '',
+      dh: evento.dh ?? '',
       qtd_of_evento: evento.qtd_of_evento,
       qtd_prc_evento: evento.qtd_prc_evento,
       status_evento: evento.status_evento,
@@ -237,6 +245,157 @@ export class EventoService {
     } finally {
       if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
     }
+  }
+
+  async gerarXlsPd(
+    eventoId: number,
+    dh: string,
+  ): Promise<{ buffer: Buffer; nomeArquivo: string }> {
+    const resumo = await this.getResumoEscalas(eventoId);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('PD');
+    sheet.views = [{ showGridLines: false }];
+
+    const VALOR_COTA = 180;
+
+    // ─── Cabeçalho título ────────────────────────────────────────────────────
+    sheet.mergeCells('A1:N1');
+    const tituloCell = sheet.getCell('A1');
+    tituloCell.value =
+      'PLANILHA PARA GERAÇÃO AUTOMÁTICA DE PD PARA PAGAMENTO DE EMPENHO';
+    tituloCell.font = { bold: true, size: 11 };
+    tituloCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    tituloCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFD9D9D9' },
+    };
+    sheet.getRow(1).height = 22;
+
+    // ─── Linha 2: grupo cabeçalhos ───────────────────────────────────────────
+    sheet.mergeCells('A2:B2');
+    sheet.getCell('A2').value = 'Identificação da Origem';
+
+    sheet.mergeCells('C2:D2');
+    sheet.getCell('C2').value = 'Período de Viagem p/ Diária';
+
+    sheet.mergeCells('E2:K2');
+    sheet.getCell('E2').value = 'Dados do Credor/Recebedor';
+
+    sheet.mergeCells('L2:N2');
+    sheet.getCell('L2').value = 'Conta Bancária do Credor/Recebedor';
+
+    // estilo linha 2
+    ['A2', 'C2', 'E2', 'L2'].forEach((ref) => {
+      const cell = sheet.getCell(ref);
+      cell.font = { bold: true, size: 9 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFD9E1F2' },
+      };
+    });
+    sheet.getRow(2).height = 18;
+
+    // ─── Linha 3: sub-cabeçalhos ─────────────────────────────────────────────
+    const subHeaders = [
+      'Número do\nEmpenho', // A
+      'Número do DH', // B
+      'Início', // C
+      'Fim', // D
+      'Número do\nDocumento\n(CPF/CNPJ)', // E
+      'TP\nPESSOA', // F
+      'Nome Credor / Recebedor', // G
+      'Código\nBanco', // H (L na imagem, mas seguindo estrutura)
+      'Código\nAgência', // I
+      'Número\nConta', // J
+      'Dígito', // K
+      'Valor do\nPagamento (R$)', // L
+      'Observação', // M
+    ];
+
+    const headerRow = sheet.getRow(3);
+    subHeaders.forEach((h, i) => {
+      const cell = headerRow.getCell(i + 1);
+      cell.value = h;
+      cell.font = { bold: true, size: 9, color: { argb: 'FF000000' } };
+      cell.alignment = {
+        horizontal: 'center',
+        vertical: 'middle',
+        wrapText: true,
+      };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFD9D9D9' },
+      };
+      cell.border = {
+        top: { style: 'thin' },
+        bottom: { style: 'thin' },
+        left: { style: 'thin' },
+        right: { style: 'thin' },
+      };
+    });
+    headerRow.height = 40;
+
+    // ─── Dados ───────────────────────────────────────────────────────────────
+    resumo.usuarios.forEach((u, index) => {
+      const valor = u.totalCotas * VALOR_COTA;
+      const row = sheet.addRow([
+        resumo.ne, // A - Número do Empenho
+        dh, // B - Número do DH
+        '', // C - Início (em branco)
+        '', // D - Fim (em branco)
+        u.cpf, // E - CPF
+        'F', // F - TP Pessoa
+        u.nomeCompleto, // G - Nome
+        u.cod_banco, // H - Código Banco
+        u.agencia, // I - Agência
+        u.conta, // J - Conta
+        u.dig_conta, // K - Dígito
+        valor, // L - Valor
+        '', // M - Observação
+      ]);
+
+      const isEven = index % 2 === 0;
+      row.eachCell((cell, colNumber) => {
+        cell.font = { size: 9 };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: isEven ? 'FFFFFFFF' : 'FFF2F2F2' },
+        };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+          bottom: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+          left: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+          right: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+        };
+        // coluna valor: formato moeda
+        if (colNumber === 12) {
+          cell.numFmt = '#,##0.00';
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+        }
+        // nome: alinha à esquerda
+        if (colNumber === 7) {
+          cell.alignment = { horizontal: 'left', vertical: 'middle' };
+        }
+      });
+      row.height = 16;
+    });
+
+    // ─── Auto-largura ─────────────────────────────────────────────────────────
+    const colWidths = [16, 16, 10, 10, 14, 8, 35, 8, 10, 12, 7, 16, 14];
+    sheet.columns.forEach((col, i) => {
+      col.width = colWidths[i] ?? 12;
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const nomeArquivo = `PD_${resumo.nome_evento.replace(/[^a-zA-Z0-9_\-]/g, '_')}_${dh.replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
+    return { buffer: Buffer.from(buffer), nomeArquivo };
   }
 
   /**
@@ -507,6 +666,7 @@ export class EventoService {
       ome,
       nome_evento: dto.nome_evento,
       ne: dto.ne ?? '',
+      dh: dto.dh ?? '',
       qtd_of_evento: dto.qtd_of_evento,
       qtd_prc_evento: dto.qtd_prc_evento,
       user: user,
@@ -671,6 +831,7 @@ export class EventoService {
       evento.qtd_prc_evento = dto.qtd_prc_evento;
     if (dto.nome_evento !== undefined) evento.nome_evento = dto.nome_evento;
     if (dto.ne !== undefined) evento.ne = dto.ne;
+    if (dto.dh !== undefined) evento.dh = dto.dh;
 
     await this.eventoRepo.save(evento);
     return this.findOne(id);

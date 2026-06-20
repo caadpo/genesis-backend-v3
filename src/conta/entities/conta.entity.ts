@@ -19,10 +19,16 @@ export class ContaEntity {
   banco!: string;
 
   @Column()
+  cod_banco!: string;
+
+  @Column()
   agencia!: string;
 
   @Column()
   conta!: string;
+
+  @Column()
+  dig_conta!: string;
 
   @Column({ name: 'usuario_id', unique: true })
   usuarioId!: number;
