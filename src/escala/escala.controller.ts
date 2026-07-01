@@ -122,6 +122,32 @@ export class EscalaController {
     res.end(buffer);
   }
 
+  @Patch(':id/presenca')
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.AUXILIAR,
+    UserType.DIRETOR,
+    UserType.ESTRATEGICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.COMUN,
+    UserType.GESTOR_VERBA,
+  )
+  confirmarPresenca(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { confirmado: boolean; observacao?: string },
+    @Request() req: any,
+  ) {
+    console.log('req.user:', req.user); // 👈 debug temporário
+    return this.service.confirmarPresenca(
+      id,
+      body.confirmado,
+      body.observacao,
+      req.user,
+    );
+  }
+
   @Get('minhas')
   @Roles(
     UserType.MASTER,

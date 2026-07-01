@@ -52,12 +52,13 @@ export class UserController {
   }
 
   @Put(':id')
-  @Roles(UserType.TECNICO, UserType.MASTER)
+  @Roles(UserType.MASTER, UserType.AUXILIAR)
   async updateUser(
     @Param('id') id: number,
     @Body() dto: UpdateUserDto,
+    @Request() req: any,
   ): Promise<UserEntity> {
-    return this.userService.updateUser(id, dto);
+    return this.userService.updateUser(id, dto, req.user);
   }
 
   @Roles(
@@ -83,7 +84,7 @@ export class UserController {
   }
 
   @Put(':id/reset-password')
-  @Roles(UserType.MASTER, UserType.TECNICO, UserType.AUXILIAR)
+  @Roles(UserType.MASTER, UserType.AUXILIAR)
   async resetPassword(@Param('id') id: number, @Request() req: any) {
     await this.userService.resetPasswordToGenesis(req.user.id, id);
     return { message: 'Senha resetada para o padrão genesis' };

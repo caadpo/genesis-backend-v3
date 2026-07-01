@@ -11,18 +11,8 @@ import { ReturnPagamentoDto } from './dtos/return-pagamento.dto';
 import { EscalaEntity } from 'src/escala/entities/escala.entity';
 import { Evento } from 'src/evento/entities/evento.entity';
 import { UserEntity } from 'src/user/entities/user.entity';
-
-// ─── Valor por cota por tipo ──────────────────────────────────────────────────
-const VALOR_COTA = {
-  DIARIAS: {
-    O: 180,
-    P: 180,
-  },
-  PJES: {
-    O: 300,
-    P: 200,
-  },
-} as const;
+import { Teto } from 'src/tetos/entities/teto.entity';
+import { StatusTeto } from 'src/tetos/enum/teto-type.enum';
 
 @Injectable()
 export class PagamentoService {
@@ -35,6 +25,9 @@ export class PagamentoService {
 
     @InjectRepository(Evento)
     private readonly eventoRepo: Repository<Evento>,
+
+    @InjectRepository(Teto)
+    private readonly tetoRepo: Repository<Teto>,
   ) {}
 
   // ─── Gerar pagamentos a partir do resumo do evento ───────────────────────────
@@ -49,12 +42,12 @@ export class PagamentoService {
       .createQueryBuilder('e')
       .select('e.usuario_id', 'usuarioId')
       .addSelect('e.nomecompleto_escala', 'nomeCompleto')
-      .addSelect('e.nomeome_escala', 'nomeOme') // ← estava faltando
+      .addSelect('e.nomeome_escala', 'nomeOme')
       .addSelect('e.cpf_escala', 'cpf')
       .addSelect('e.tipo_escala', 'tipo')
-      .addSelect('c.banco', 'banco') // ← via join, não e.banco_escala
-      .addSelect('c.agencia', 'agencia') // ← via join
-      .addSelect('c.conta', 'conta') // ← via join
+      .addSelect('c.banco', 'banco')
+      .addSelect('c.agencia', 'agencia')
+      .addSelect('c.conta', 'conta')
       .addSelect('COALESCE(SUM(e.cota_escala), 0)', 'totalCotas')
       .innerJoin('e.operacao', 'op')
       .innerJoin('op.evento', 'ev')
@@ -70,14 +63,6 @@ export class PagamentoService {
       .addGroupBy('c.agencia')
       .addGroupBy('c.conta')
       .getRawMany();
-
-    for (const r of rows) {
-      console.log({
-        usuario: r.usuarioId,
-        cpf: r.cpf,
-        tipo: typeof r.cpf,
-      });
-    }
 
     if (!rows.length) {
       throw new BadRequestException(
@@ -143,8 +128,10 @@ export class PagamentoService {
     return pagamentos.map((p) => new ReturnPagamentoDto(p));
   }
 
+  // ─── Eventos pagos unificados: DIARIAS (status_evento=PAGO) + PJES (teto.status=ENCERRADO) ──
   async findEventosPagos(limit?: number): Promise<any[]> {
-    const qb = this.repo
+    // ── 1. DIARIAS: via tabela pagamento (comportamento original) ─────────────
+    const qbDiarias = this.repo
       .createQueryBuilder('p')
       .select('p.evento_id', 'eventoId')
       .addSelect('ev.nome_evento', 'nome_evento')
@@ -156,6 +143,7 @@ export class PagamentoService {
       .addSelect('MIN(p.created_at)', 'createdAt')
       .innerJoin('evento', 'ev', 'ev.id = p.evento_id')
       .innerJoin('ome', 'ome', 'ome.id = ev.ome_id')
+      .where("p.sistema = 'DIARIAS'")
       .groupBy('p.evento_id')
       .addGroupBy('ev.nome_evento')
       .addGroupBy('ome.nomeOme')
@@ -163,11 +151,80 @@ export class PagamentoService {
       .addGroupBy('p.nome_verba')
       .orderBy('MIN(p.created_at)', 'DESC');
 
-    if (limit) qb.limit(limit);
+    if (limit) qbDiarias.limit(limit);
 
-    const rows = await qb.getRawMany();
+    const rowsDiarias = await qbDiarias.getRawMany();
 
-    return rows.map((r) => ({
+    // ── 2. PJES: via teto com status ENCERRADO ────────────────────────────────
+    // Busca os tetos PJES encerrados e agrega dados de eventos/OMEs vinculados
+    const rowsPjes = await this.tetoRepo
+      .createQueryBuilder('t')
+      .select('t.id', 'eventoId') // usa tetoId como identificador único
+      .addSelect('t.nome_verba', 'nome_evento')
+      .addSelect("'PJES - ' || t.nome_verba", 'nome_ome')
+      .addSelect("'PJES'", 'sistema')
+      .addSelect('t.nome_verba', 'nome_verba')
+      .addSelect(
+        // conta policiais distintos escalados em eventos desse teto
+        (sub) =>
+          sub
+            .select('COUNT(DISTINCT e.usuario_id)')
+            .from(EscalaEntity, 'e')
+            .innerJoin('e.operacao', 'op')
+            .innerJoin('op.evento', 'ev')
+            .innerJoin('ev.distribuicao', 'd')
+            .where('d.teto_id = t.id'),
+        'total_policiais',
+      )
+      .addSelect('t.valor_total', 'valor_total_evento')
+      .addSelect('t.updated_at', 'createdAt') // usa data de encerramento
+      .where('t.sistema = :sistema', { sistema: 'PJES' })
+      .andWhere('t.status = :status', { status: StatusTeto.ENCERRADO })
+      .orderBy('t.updated_at', 'DESC')
+      .getRawMany();
+
+    // ── 3. Monta a lista com a OME principal de cada teto PJES ───────────────
+    // Busca a OME do primeiro evento de cada teto para exibição
+    const teto_ids = rowsPjes.map((r) => Number(r.eventoId));
+    const omesPorTeto = new Map<number, string>();
+
+    if (teto_ids.length > 0) {
+      const omesRows = await this.eventoRepo
+        .createQueryBuilder('ev')
+        .select('d.teto_id', 'tetoId')
+        .addSelect('ome.nomeOme', 'nomeOme')
+        .innerJoin('ev.distribuicao', 'd')
+        .innerJoin('ev.ome', 'ome')
+        .where('d.teto_id IN (:...ids)', { ids: teto_ids })
+        .groupBy('d.teto_id')
+        .addGroupBy('ome.nomeOme')
+        .getRawMany();
+
+      // Pega a primeira OME encontrada por teto (pode haver mais de uma)
+      for (const row of omesRows) {
+        const tid = Number(row.tetoId);
+        if (!omesPorTeto.has(tid)) {
+          omesPorTeto.set(tid, row.nomeOme);
+        }
+      }
+    }
+
+    // ── 4. Formata resultados PJES com a OME correta ─────────────────────────
+    const resultadosPjes = rowsPjes.map((r) => ({
+      uid: `PJES-${r.eventoId}`,
+      eventoId: Number(r.eventoId),
+      nome_evento: r.nome_evento,
+      nome_ome: omesPorTeto.get(Number(r.eventoId)) ?? r.nome_ome,
+      sistema: 'PJES',
+      nome_verba: r.nome_verba,
+      total_policiais: Number(r.total_policiais),
+      valor_total_evento: Number(r.valor_total_evento),
+      createdAt: r.createdAt,
+    }));
+
+    // ── 5. Formata resultados DIARIAS ─────────────────────────────────────────
+    const resultadosDiarias = rowsDiarias.map((r) => ({
+      uid: `DIARIAS-${r.eventoId}`,
       eventoId: Number(r.eventoId),
       nome_evento: r.nome_evento,
       nome_ome: r.nome_ome,
@@ -177,6 +234,14 @@ export class PagamentoService {
       valor_total_evento: Number(r.valor_total_evento),
       createdAt: r.createdAt,
     }));
+
+    // ── 6. Unifica, ordena por data desc e aplica limit ───────────────────────
+    const todos = [...resultadosPjes, ...resultadosDiarias].sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+
+    return limit ? todos.slice(0, limit) : todos;
   }
 
   async findByEventoPaginado(
@@ -222,37 +287,20 @@ export class PagamentoService {
     return new ReturnPagamentoDto(pagamento);
   }
 
-  // ─── Listar todos os pagamentos ─────────────────────────────────────────────
   async findAll(): Promise<ReturnPagamentoDto[]> {
     const pagamentos = await this.repo.find({
-      relations: {
-        evento: {
-          ome: true,
-        },
-      },
-      order: {
-        createdAt: 'DESC',
-      },
+      relations: { evento: { ome: true } },
+      order: { createdAt: 'DESC' },
     });
-
     return pagamentos.map((p) => new ReturnPagamentoDto(p));
   }
 
-  // ─── Buscar um pagamento por ID ────────────────────────────────────────────
   async findOne(id: number): Promise<ReturnPagamentoDto> {
     const pagamento = await this.repo.findOne({
       where: { id },
-      relations: {
-        evento: {
-          ome: true,
-        },
-      },
+      relations: { evento: { ome: true } },
     });
-
-    if (!pagamento) {
-      throw new NotFoundException('Pagamento não encontrado');
-    }
-
+    if (!pagamento) throw new NotFoundException('Pagamento não encontrado');
     return new ReturnPagamentoDto(pagamento);
   }
 }

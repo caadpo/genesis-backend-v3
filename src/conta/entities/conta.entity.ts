@@ -56,4 +56,7 @@ export class ContaEntity {
   @ManyToOne(() => UserEntity)
   @JoinColumn({ name: 'updated_by_user_id' })
   updatedByUser!: UserEntity;
+
+  @Column({ type: 'boolean', default: false, name: 'is_efisco' })
+  isEfisco!: boolean;
 }

@@ -77,6 +77,12 @@ export class CreateContaTable1775481824059 implements MigrationInterface {
             type: 'integer',
             isNullable: true,
           },
+          {
+            name: 'is_efisco',
+            type: 'boolean',
+            isNullable: false,
+            default: false,
+          },
         ],
         uniques: [
           // 🔒 1 CONTA POR USUÁRIO

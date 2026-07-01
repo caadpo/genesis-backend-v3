@@ -55,7 +55,7 @@ export class PagamentoEntity {
   @Column({ name: 'conta_pagamento', type: 'varchar' })
   conta_pagamento!: string;
 
-  @Column({ name: 'comentario_pagamento', type: 'varchar' })
+  @Column({ name: 'comentario_pagamento', type: 'varchar', nullable: true })
   comentario_pagamento!: string;
 
   @Column({ type: 'boolean', default: true, name: 'pgtrue' })

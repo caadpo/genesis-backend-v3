@@ -9,6 +9,7 @@ import { Operacao } from 'src/operacao/entities/operacao.entity';
 import { Evento } from 'src/evento/entities/evento.entity';
 import { DadosSgpEntity } from 'src/dadossgp/entities/dadossgp.entity'; // ✅ adicionar
 import { ViaturaEntity } from 'src/viatura/entities/viatura.entity';
+import { PagamentoEntity } from 'src/pagamento/entities/pagamento.entity';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { ViaturaEntity } from 'src/viatura/entities/viatura.entity';
       Evento,
       DadosSgpEntity,
       ViaturaEntity,
+      PagamentoEntity,
     ]),
   ],
   controllers: [EscalaController],

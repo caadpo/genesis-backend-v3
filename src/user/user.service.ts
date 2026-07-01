@@ -218,8 +218,41 @@ export class UserService {
   }
 
   // Editar usuário
-  async updateUser(id: number, dto: UpdateUserDto): Promise<UserEntity> {
+  async updateUser(
+    id: number,
+    dto: UpdateUserDto,
+    usuarioLogado: { id: number; typeUser: number; omeId: number },
+  ): Promise<UserEntity> {
+    const isMaster = Number(usuarioLogado.typeUser) === UserType.MASTER;
+    const isAuxiliar = Number(usuarioLogado.typeUser) === UserType.AUXILIAR;
+
+    if (!isMaster && !isAuxiliar) {
+      throw new ForbiddenException('Sem permissão para atualizar usuários');
+    }
+
     const user = await this.findById(id);
+
+    if (isAuxiliar) {
+      // Auxiliar só pode atualizar usuários da sua própria OME
+      if (user.omeId !== usuarioLogado.omeId) {
+        throw new ForbiddenException(
+          'Auxiliar só pode atualizar usuários da sua OME',
+        );
+      }
+
+      // Auxiliar só pode definir o typeUser como Auxiliar ou COMUN
+      if (
+        dto.typeUser !== undefined &&
+        dto.typeUser !== UserType.AUXILIAR &&
+        dto.typeUser !== UserType.COMUN
+      ) {
+        throw new ForbiddenException(
+          'Auxiliar só pode definir o tipo de usuário como Auxiliar ou Comum',
+        );
+      }
+
+      // omeId é livre para o auxiliar (pode mover usuário para qualquer OME)
+    }
 
     if (dto.password) {
       user.password = await createPasswordHashed(dto.password);
@@ -261,15 +294,13 @@ export class UserService {
     const requester = await this.findById(requesterId);
     const target = await this.findById(targetUserId);
 
-    const isMasterOrTecnico =
-      requester.typeUser === UserType.MASTER ||
-      requester.typeUser === UserType.TECNICO;
+    const isMaster = requester.typeUser === UserType.MASTER;
 
     const isAuxiliarSameOme =
       requester.typeUser === UserType.AUXILIAR &&
       requester.omeId === target.omeId;
 
-    if (!isMasterOrTecnico && !isAuxiliarSameOme) {
+    if (!isMaster && !isAuxiliarSameOme) {
       throw new ForbiddenException(
         'Sem permissão para resetar a senha deste usuário',
       );

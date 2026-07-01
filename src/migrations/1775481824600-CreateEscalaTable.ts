@@ -163,6 +163,40 @@ export class CreateEscalaTable1775481824600 implements MigrationInterface {
             comment: 'ID do repasse que originou esta escala',
           },
           {
+            name: 'presenca_confirmada',
+            type: 'boolean',
+            isNullable: false,
+            default: false,
+            comment: 'Indica se a presença do policial foi confirmada',
+          },
+          {
+            name: 'presenca_observacao',
+            type: 'text',
+            isNullable: true,
+          },
+          {
+            name: 'presenca_confirmada_em',
+            type: 'timestamp',
+            isNullable: true,
+          },
+          {
+            name: 'presenca_confirmada_por_id',
+            type: 'integer',
+            isNullable: true,
+          },
+
+          {
+            name: 'observacao_escrita_em',
+            type: 'timestamp',
+            isNullable: true,
+          },
+          {
+            name: 'observacao_escrita_por_id',
+            type: 'integer',
+            isNullable: true,
+          },
+
+          {
             name: 'created_at',
             type: 'timestamp',
             default: 'now()',
@@ -215,6 +249,13 @@ export class CreateEscalaTable1775481824600 implements MigrationInterface {
         columnNames: ['mat_escala', 'sistema', 'data_inicio'],
       }),
     );
+
+    // 👇 ADICIONAR este índice parcial (performance para buscar pendências)
+    await queryRunner.query(`
+      CREATE INDEX "IDX_escala_presenca_pendente"
+      ON escala (operacao_id)
+      WHERE presenca_confirmada = false
+    `);
 
     // ── Unique constraint: mesma mat + sistema + data → BLOQUEADO ─────────────
     // Reflete o @Index(['mat_escala', 'dataInicio', 'sistema'], { unique: true })
@@ -277,6 +318,18 @@ export class CreateEscalaTable1775481824600 implements MigrationInterface {
         onDelete: 'SET NULL',
       }),
     );
+
+    // 👇 ADICIONAR esta FK
+    await queryRunner.createForeignKey(
+      'escala',
+      new TableForeignKey({
+        name: 'FK_escala_presenca_confirmada_por',
+        columnNames: ['presenca_confirmada_por_id'],
+        referencedTableName: 'user',
+        referencedColumnNames: ['id'],
+        onDelete: 'SET NULL',
+      }),
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
@@ -289,6 +342,10 @@ export class CreateEscalaTable1775481824600 implements MigrationInterface {
         await queryRunner.dropUniqueConstraint('escala', uq);
       }
     }
+
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_escala_presenca_pendente"`,
+    );
 
     await queryRunner.dropIndex('escala', 'IDX_escala_mat_sistema_data');
     await queryRunner.dropIndex('escala', 'IDX_escala_mat_escala');

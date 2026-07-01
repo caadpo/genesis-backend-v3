@@ -11,16 +11,16 @@ import {
 @Entity({ name: 'diretoria' })
 export class DiretoriaEntity {
   @PrimaryGeneratedColumn('rowid')
-  id: number;
+  id!: number;
 
   @Column({ name: 'nomediretoria', nullable: false })
-  nomeDiretoria: string;
+  nomeDiretoria!: string;
 
   @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @OneToMany(() => OmeEntity, (ome) => ome.diretoria)
   omes?: OmeEntity[];

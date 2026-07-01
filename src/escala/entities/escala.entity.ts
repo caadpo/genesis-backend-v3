@@ -35,31 +35,31 @@ export class EscalaEntity {
   /* Campos vindos da tabel dadosSGP */
 
   @Column({ type: 'varchar', name: 'pg_escala' })
-  pg_escala!: string; //Cb ou Cap
+  pg_escala!: string;
 
   @Column({ type: 'varchar', name: 'mat_escala' })
-  mat_escala!: string; //1157590
+  mat_escala!: string;
 
   @Column({ type: 'varchar', name: 'ng_escala' })
   ng_escala!: string; //Nome de Guerra
 
   @Column({ type: 'varchar', name: 'tipo_escala' })
-  tipo_escala!: string; //O ou P
+  tipo_escala!: string;
 
   @Column({ type: 'varchar', name: 'cpf_escala' })
   cpf_escala!: string;
 
   @Column({ type: 'varchar', name: 'nomecompleto_escala' })
-  nomecompleto_escala!: string; //EMERSON FRANCISCO DA SILVA
+  nomecompleto_escala!: string;
 
   @Column({ type: 'varchar', name: 'nomeome_escala' })
-  nomeome_escala!: string; //OME do usuário na escala
+  nomeome_escala!: string;
 
   @Column({ type: 'varchar', name: 'nunfunc_escala' })
-  nunfunc_escala!: string; //Número de Funcionário
+  nunfunc_escala!: string;
 
   @Column({ type: 'varchar', name: 'nunvinc_escala' })
-  nunvinc_escala!: string; //Número de Vinculo
+  nunvinc_escala!: string;
 
   // Conta relacionada
   @ManyToOne(() => ContaEntity, { nullable: true })
@@ -106,6 +106,32 @@ export class EscalaEntity {
 
   @Column({ type: 'integer', nullable: true, name: 'repasse_origem_id' })
   repasseOrigemId?: number | null;
+
+  @Column({
+    name: 'presenca_confirmada_por_id',
+    nullable: true,
+  })
+  presencaConfirmadaPorId?: number;
+
+  @Column({ type: 'boolean', default: false, name: 'presenca_confirmada' })
+  presencaConfirmada!: boolean;
+
+  @Column({ type: 'text', name: 'presenca_observacao', nullable: true })
+  presencaObservacao?: string | null;
+
+  @Column({ type: 'timestamp', name: 'presenca_confirmada_em', nullable: true })
+  presencaConfirmadaEm?: Date | null;
+
+  @ManyToOne(() => UserEntity, { nullable: true, eager: false })
+  @JoinColumn({ name: 'presenca_confirmada_por_id' })
+  presencaConfirmadaPor?: UserEntity | null;
+
+  @ManyToOne(() => UserEntity, { nullable: true, eager: false })
+  @JoinColumn({ name: 'observacao_escrita_por_id' })
+  observacaoEscritaPor!: UserEntity | null;
+
+  @Column({ name: 'observacao_escrita_em', type: 'timestamp', nullable: true })
+  observacaoEscritaEm!: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;

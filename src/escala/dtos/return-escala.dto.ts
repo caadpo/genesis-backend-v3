@@ -55,7 +55,19 @@ export class ReturnEscalaDto {
   } | null;
   phone?: string | null;
 
-  constructor(e: EscalaEntity) {
+  presencaConfirmada!: boolean;
+  presencaObservacao?: string | null;
+  presencaConfirmadaEm?: Date | null;
+  presencaConfirmadaPorNome?: string | null;
+  comentario_pagamento?: string | null;
+  observacaoEscritaPorNome!: string | null;
+  observacaoEscritaEm!: Date | null;
+
+  constructor(
+    e: EscalaEntity,
+    nomeConfirmador?: string | null,
+    nomeObsAutor?: string | null,
+  ) {
     this.id = e.id;
     this.sistema = e.sistema;
     this.pg_escala = e.pg_escala;
@@ -98,5 +110,13 @@ export class ReturnEscalaDto {
         }
       : null;
     this.phone = e.usuario?.phone ?? null;
+
+    this.presencaConfirmada = e.presencaConfirmada ?? false;
+    this.presencaObservacao = e.presencaObservacao ?? null;
+    this.presencaConfirmadaEm = e.presencaConfirmadaEm ?? null;
+    this.presencaConfirmadaPorNome = nomeConfirmador ?? null;
+    this.comentario_pagamento = null;
+    this.observacaoEscritaPorNome = nomeObsAutor ?? null;
+    this.observacaoEscritaEm = e.observacaoEscritaEm ?? null;
   }
 }
