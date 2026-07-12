@@ -37,6 +37,7 @@ import { DadosSgpModule } from './dadossgp/dadossgp.module';
         DB_PASSWORD: Joi.string().required(),
         DB_DATABASE: Joi.string().required(),
         JWT_SECRET: Joi.string().required(),
+        JWT_EXPIRES_IN: Joi.string().default('2h'),
       }),
     }),
 
@@ -50,6 +51,8 @@ import { DadosSgpModule } from './dadossgp/dadossgp.module';
       entities: [`${__dirname}/**/*.entity{.ts,.js}`],
       migrations: [`${__dirname}/migrations/*.{ts,js}`],
       migrationsRun: process.env.NODE_ENV !== 'production',
+      retryAttempts: 10,
+      retryDelay: 3000,
     }),
 
     ScheduleModule.forRoot(),

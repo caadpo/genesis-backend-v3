@@ -255,9 +255,31 @@ export class EventoService {
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('PD');
-    sheet.views = [{ showGridLines: false }];
 
     const VALOR_COTA = 180;
+
+    // ─── Helpers ────────────────────────────────────────────────────────────
+    const onlyDigits = (v: unknown) => String(v ?? '').replace(/\D/g, '');
+    const padDigits = (v: unknown, len: number) =>
+      onlyDigits(v).padStart(len, '0');
+
+    const setGroupHeader = (range: string, text: string) => {
+      sheet.mergeCells(range);
+      const topLeftRef = range.split(':')[0];
+      const cell = sheet.getCell(topLeftRef);
+      cell.value = text;
+      cell.font = { bold: true, size: 9 };
+      cell.alignment = {
+        horizontal: 'center',
+        vertical: 'middle',
+        wrapText: true,
+      };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFD9E1F2' },
+      };
+    };
 
     // ─── Cabeçalho título ────────────────────────────────────────────────────
     sheet.mergeCells('A1:N1');
@@ -273,52 +295,36 @@ export class EventoService {
     };
     sheet.getRow(1).height = 22;
 
-    // ─── Linha 2: grupo cabeçalhos ───────────────────────────────────────────
-    sheet.mergeCells('A2:B2');
-    sheet.getCell('A2').value = 'Identificação da Origem';
+    // ─── Linhas 2-3: grupos mesclados ────────────────────────────────────────
+    setGroupHeader('A2:A4', '');
+    setGroupHeader('B2:C3', 'Identificação da Origem');
+    setGroupHeader('D2:E3', 'Período de Viagem p/ Diária');
+    setGroupHeader('F2:L3', 'Dados do Credor/Recebedor');
+    setGroupHeader('M2:N3', 'Conta Bancária do Credor/Recebedor');
 
-    sheet.mergeCells('C2:D2');
-    sheet.getCell('C2').value = 'Período de Viagem p/ Diária';
-
-    sheet.mergeCells('E2:K2');
-    sheet.getCell('E2').value = 'Dados do Credor/Recebedor';
-
-    sheet.mergeCells('L2:N2');
-    sheet.getCell('L2').value = 'Conta Bancária do Credor/Recebedor';
-
-    // estilo linha 2
-    ['A2', 'C2', 'E2', 'L2'].forEach((ref) => {
-      const cell = sheet.getCell(ref);
-      cell.font = { bold: true, size: 9 };
-      cell.alignment = { horizontal: 'center', vertical: 'middle' };
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFD9E1F2' },
-      };
-    });
     sheet.getRow(2).height = 18;
+    sheet.getRow(3).height = 18;
 
-    // ─── Linha 3: sub-cabeçalhos ─────────────────────────────────────────────
+    // ─── Linha 4: sub-cabeçalhos (colunas B a N) ─────────────────────────────
     const subHeaders = [
-      'Número do\nEmpenho', // A
-      'Número do DH', // B
-      'Início', // C
-      'Fim', // D
-      'Número do\nDocumento\n(CPF/CNPJ)', // E
-      'TP\nPESSOA', // F
-      'Nome Credor / Recebedor', // G
-      'Código\nBanco', // H (L na imagem, mas seguindo estrutura)
-      'Código\nAgência', // I
-      'Número\nConta', // J
-      'Dígito', // K
-      'Valor do\nPagamento (R$)', // L
-      'Observação', // M
+      'Número do Empenho', // B ← sem \n
+      'Número do DH', // C
+      'Início', // D
+      'Fim', // E
+      'Número do Documento (CPF/CNPJ)', // F ← sem \n
+      'TP PESSOA', // G ← sem \n
+      'Nome Credor / Recebedor', // H
+      'Código Banco', // I ← sem \n
+      'Código Agência', // J ← sem \n
+      'Número Conta', // K ← sem \n
+      'Dígito', // L
+      'Valor do Pagamento (R$)', // M ← sem \n
+      'Observação', // N
     ];
 
-    const headerRow = sheet.getRow(3);
+    const headerRow = sheet.getRow(4);
     subHeaders.forEach((h, i) => {
-      const cell = headerRow.getCell(i + 1);
+      const cell = headerRow.getCell(i + 2); // começa na coluna B
       cell.value = h;
       cell.font = { bold: true, size: 9, color: { argb: 'FF000000' } };
       cell.alignment = {
@@ -340,23 +346,32 @@ export class EventoService {
     });
     headerRow.height = 40;
 
-    // ─── Dados ───────────────────────────────────────────────────────────────
+    // ─── Congela cabeçalho (linhas 1 a 4) ─────────────────────────────────────
+    sheet.views = [{ state: 'frozen', ySplit: 4, showGridLines: false }];
+
+    // ─── Dados (a partir da linha 5) ──────────────────────────────────────────
     resumo.usuarios.forEach((u, index) => {
+      const numero = index + 1;
+      const cpf = padDigits(u.cpf, 11);
+      const agencia = padDigits(u.agencia, 4);
+      const conta = padDigits(u.conta, 12);
       const valor = u.totalCotas * VALOR_COTA;
+
       const row = sheet.addRow([
-        resumo.ne, // A - Número do Empenho
-        dh, // B - Número do DH
-        '', // C - Início (em branco)
-        '', // D - Fim (em branco)
-        u.cpf, // E - CPF
-        'F', // F - TP Pessoa
-        u.nomeCompleto, // G - Nome
-        u.cod_banco, // H - Código Banco
-        u.agencia, // I - Agência
-        u.conta, // J - Conta
-        u.dig_conta, // K - Dígito
-        valor, // L - Valor
-        '', // M - Observação
+        numero, // A - Nº (sequencial 1,2,3,...)
+        resumo.ne, // B - Número do Empenho
+        dh, // C - Número do DH
+        '', // D - Início (em branco)
+        '', // E - Fim (em branco)
+        cpf, // F - CPF (11 dígitos, sem máscara)
+        'F', // G - TP Pessoa
+        u.nomeCompleto, // H - Nome
+        u.cod_banco, // I - Código Banco
+        agencia, // J - Agência (4 dígitos)
+        conta, // K - Conta (12 dígitos)
+        u.dig_conta, // L - Dígito
+        valor, // M - Valor
+        '', // N - Observação
       ]);
 
       const isEven = index % 2 === 0;
@@ -374,13 +389,18 @@ export class EventoService {
           left: { style: 'thin', color: { argb: 'FFD9D9D9' } },
           right: { style: 'thin', color: { argb: 'FFD9D9D9' } },
         };
+
+        // CPF, Agência e Conta como texto (preserva zeros à esquerda)
+        if (colNumber === 6 || colNumber === 10 || colNumber === 11) {
+          cell.numFmt = '@';
+        }
         // coluna valor: formato moeda
-        if (colNumber === 12) {
+        if (colNumber === 13) {
           cell.numFmt = '#,##0.00';
           cell.alignment = { horizontal: 'right', vertical: 'middle' };
         }
         // nome: alinha à esquerda
-        if (colNumber === 7) {
+        if (colNumber === 8) {
           cell.alignment = { horizontal: 'left', vertical: 'middle' };
         }
       });
@@ -388,7 +408,7 @@ export class EventoService {
     });
 
     // ─── Auto-largura ─────────────────────────────────────────────────────────
-    const colWidths = [16, 16, 10, 10, 14, 8, 35, 8, 10, 12, 7, 16, 14];
+    const colWidths = [6, 16, 16, 10, 10, 14, 8, 35, 8, 10, 12, 7, 16, 14];
     sheet.columns.forEach((col, i) => {
       col.width = colWidths[i] ?? 12;
     });
