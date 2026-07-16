@@ -59,6 +59,7 @@ export class TetosController {
     UserType.FINANCEIRO,
     UserType.PD,
     UserType.TECNICO,
+    UserType.GESTOR_VERBA,
     UserType.MASTER,
   )
   findDiarias(@Query('status') status?: string): Promise<ReturnTetoDto[]> {

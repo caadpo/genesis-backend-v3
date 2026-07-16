@@ -47,6 +47,7 @@ export class EventoController {
     UserType.DIRETOR,
     UserType.ESTRATEGICO,
     UserType.FINANCEIRO,
+    UserType.GESTOR_VERBA,
     UserType.PD,
   )
   getResumoEscalas(@Param('id', ParseIntPipe) id: number) {
@@ -62,6 +63,7 @@ export class EventoController {
     UserType.ESTRATEGICO,
     UserType.FINANCEIRO,
     UserType.PD,
+    UserType.GESTOR_VERBA,
   )
   async downloadPdf(
     @Param('id', ParseIntPipe) id: number,

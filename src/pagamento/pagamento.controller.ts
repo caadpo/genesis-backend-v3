@@ -36,6 +36,8 @@ export class PagamentoController {
     UserType.PD,
     UserType.DIRETOR,
     UserType.ESTRATEGICO,
+    UserType.GESTOR_VERBA,
+    UserType.COMUN,
   )
   findByEvento(@Param('eventoId', ParseIntPipe) eventoId: number) {
     return this.service.findByEvento(eventoId);
@@ -51,6 +53,7 @@ export class PagamentoController {
     UserType.ESTRATEGICO,
     UserType.AUXILIAR,
     UserType.COMUN,
+    UserType.GESTOR_VERBA,
   )
   findEventosPagos(@Query('limit') limit?: string) {
     return this.service.findEventosPagos(limit ? Number(limit) : undefined);
@@ -63,6 +66,7 @@ export class PagamentoController {
     UserType.FINANCEIRO,
     UserType.PD,
     UserType.DIRETOR,
+    UserType.GESTOR_VERBA,
   )
   findByEventoPaginado(
     @Param('eventoId', ParseIntPipe) eventoId: number,

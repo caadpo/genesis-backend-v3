@@ -64,6 +64,7 @@ export class EscalaController {
     UserType.AUXILIAR,
     UserType.FINANCEIRO,
     UserType.PD,
+    UserType.GESTOR_VERBA,
     UserType.COMUN,
   )
   findAll(@Query('operacaoId') operacaoId?: string) {
@@ -79,6 +80,7 @@ export class EscalaController {
     UserType.ESTRATEGICO,
     UserType.FINANCEIRO,
     UserType.PD,
+    UserType.GESTOR_VERBA,
     UserType.COMUN,
   )
   findByCodOp(@Param('codOp') codOp: string) {
@@ -93,6 +95,7 @@ export class EscalaController {
     UserType.AUXILIAR,
     UserType.FINANCEIRO,
     UserType.PD,
+    UserType.GESTOR_VERBA,
     UserType.COMUN,
   )
   async downloadPdf(
@@ -157,6 +160,7 @@ export class EscalaController {
     UserType.ESTRATEGICO,
     UserType.FINANCEIRO,
     UserType.PD,
+    UserType.GESTOR_VERBA,
     UserType.COMUN,
   )
   findMinhas(@Request() req: any) {
@@ -182,6 +186,7 @@ export class EscalaController {
     UserType.ESTRATEGICO,
     UserType.FINANCEIRO,
     UserType.PD,
+    UserType.GESTOR_VERBA,
     UserType.COMUN,
   )
   findOne(@Param('id', ParseIntPipe) id: number) {
