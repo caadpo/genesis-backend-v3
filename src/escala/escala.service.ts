@@ -859,7 +859,7 @@ export class EscalaService {
     const outputPath = path.join(tmpdir(), `COP_${cod_op}.pdf`);
 
     try {
-      await execFileAsync('python', [
+      await execFileAsync('python3', [
         SCRIPT_PATH,
         payload,
         matUsuario,

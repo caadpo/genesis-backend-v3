@@ -234,7 +234,7 @@ export class EventoService {
     const outputPath = path.join(tmpdir(), `EVENTO_${safeName}.pdf`);
 
     try {
-      await execFileAsync('python', [
+      await execFileAsync('python3', [
         SCRIPT_PATH,
         payload,
         matUsuario,
