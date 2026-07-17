@@ -109,7 +109,9 @@ export class UserService {
       ]);
 
     if (isNumber) {
-      qb.where('u.mat = :mat', { mat: q });
+      qb.where("LTRIM(u.mat::text, '0') = LTRIM(:mat::text, '0')", {
+        mat: q,
+      });
     } else {
       qb.where('dsgp.nomeguerrasgp ILIKE :nome', { nome: `${q}%` });
     }
