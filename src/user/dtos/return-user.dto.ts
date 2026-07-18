@@ -14,6 +14,7 @@ export class ReturnUserDto {
   cpf: string;
   nunfunc: string;
   nunvinc: string;
+  situacao: string;
   typeUser: UserType;
   ativo: boolean;
   ome?: ReturnOmeDto;
@@ -31,6 +32,7 @@ export class ReturnUserDto {
     this.cpf = userEntity.cpf;
     this.nunfunc = userEntity.nunfunc;
     this.nunvinc = userEntity.nunvinc;
+    this.situacao = userEntity.situacao;
     this.typeUser = userEntity.typeUser;
     this.ativo = userEntity.ativo ?? false;
     this.ome = userEntity.ome ? new ReturnOmeDto(userEntity.ome) : undefined;

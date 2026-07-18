@@ -51,6 +51,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       cpf: sgp?.cpfSgp ?? '',
       nunfunc: sgp?.nunfuncSgp ?? '',
       nunvinc: sgp?.nunvincSgp ?? '',
+      situacao: sgp?.situacaoSgp ?? '',
     });
   }
 }
