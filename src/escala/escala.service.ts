@@ -56,6 +56,16 @@ export class EscalaService {
 
   private readonly FUNCOES_COM_VIATURA = ['CMT', 'MOT', 'FISCAL', 'PAT'];
 
+  private valorMultiplicador(sistema: string, tipo_escala: string): number {
+    if (sistema === 'PJES') {
+      if (tipo_escala === 'O') return 300;
+      if (tipo_escala === 'P') return 200;
+      return 0;
+    }
+    if (sistema === 'DIARIAS') return 180;
+    return 1;
+  }
+
   // ── Cotas por escopo ────────────────────────────────────────────────────────
 
   async calcularCotasPorOperacao(operacaoId: number): Promise<CotasPorTipo[]> {
@@ -385,6 +395,8 @@ export class EscalaService {
       .addOrderBy('e.hora_inicio', 'ASC')
       .getMany();
 
+    // Agrupamento por teto — usado para exibir o total de cotas do teto
+    // (somacota_escala), que é um número "informativo" e não financeiro.
     const agrupadoPorTeto = new Map<number | null, EscalaEntity[]>();
     for (const escala of escalas) {
       const idTeto = escala?.operacao?.evento?.distribuicao?.teto?.id ?? null;
@@ -399,6 +411,24 @@ export class EscalaService {
         0,
       );
       somasPorTeto.set(idTeto, soma);
+    }
+
+    const valorFinalPorTetoSistema = new Map<string, number>();
+    for (const [idTeto, escalasTeto] of agrupadoPorTeto.entries()) {
+      const acumuladoPorSistema = new Map<string, number>();
+      for (const e of escalasTeto) {
+        const chave = `${idTeto}|${e.sistema}`;
+        const valor =
+          (e.cota_escala || 0) *
+          this.valorMultiplicador(e.sistema, e.tipo_escala);
+        acumuladoPorSistema.set(
+          chave,
+          (acumuladoPorSistema.get(chave) ?? 0) + valor,
+        );
+      }
+      for (const [chave, valor] of acumuladoPorSistema.entries()) {
+        valorFinalPorTetoSistema.set(chave, valor);
+      }
     }
 
     const matsConfirmadores = escalas
@@ -435,14 +465,15 @@ export class EscalaService {
       const somacota_escala = somasPorTeto.get(idTeto) || 0;
       const eventoId = e?.operacao?.evento?.id ?? null;
 
-      let valorMultiplicador = 1;
-      if (e.sistema === 'PJES') {
-        if (e.tipo_escala === 'O') valorMultiplicador = 300;
-        else if (e.tipo_escala === 'P') valorMultiplicador = 200;
-      } else if (e.sistema === 'DIARIAS') {
-        valorMultiplicador = 180;
-      }
-      const somaCotaFinal = somacota_escala * valorMultiplicador;
+      // Valor individual desta escala, respeitando seu próprio tipo_escala.
+      const valorIndividual =
+        (e.cota_escala || 0) *
+        this.valorMultiplicador(e.sistema, e.tipo_escala);
+
+      // Valor financeiro correto: soma de todas as escalas do mesmo
+      // teto + sistema, cada uma já calculada com seu próprio multiplicador.
+      const somaCotaFinal =
+        valorFinalPorTetoSistema.get(`${idTeto}|${e.sistema}`) ?? 0;
 
       let pagamento: string | null = null;
       if (e.sistema === 'PJES') {
@@ -465,6 +496,7 @@ export class EscalaService {
         ...new ReturnEscalaDto(e, nomeConfirmador),
         somacota_escala,
         somaCotaFinal,
+        valorIndividual,
         pagamento,
         comentario_pagamento: eventoId
           ? (comentarioPorEvento.get(eventoId) ?? null)
