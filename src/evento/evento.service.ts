@@ -840,9 +840,21 @@ export class EventoService {
       throw new BadRequestException('PRC ultrapassa limite da distribuição');
     }
 
-    if (dto.ome_id) {
+    if (dto.ome_id && dto.ome_id !== evento.ome.id) {
+      const qtdOperacoes = await this.operacaoRepo.count({
+        where: { evento: { id } },
+      });
+
+      if (qtdOperacoes > 0) {
+        throw new BadRequestException(
+          `Não é possível alterar a OME do evento pois há ${qtdOperacoes} operação(ões) vinculada(s). ` +
+            'Remova as operações primeiro ou mantenha a OME atual.',
+        );
+      }
+
       const ome = await this.omeRepo.findOneBy({ id: dto.ome_id });
-      evento.ome = ome!;
+      if (!ome) throw new NotFoundException('OME não encontrada');
+      evento.ome = ome;
     }
 
     if (dto.qtd_of_evento !== undefined)
