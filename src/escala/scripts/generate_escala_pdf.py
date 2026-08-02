@@ -393,9 +393,9 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
     usable_w = PAGE_W - 2 * MARGIN
 
     col_widths = [
-        usable_w * 0.03,  # Número
+        usable_w * 0.04,  # Número
 
-        usable_w * 0.26,  # Identificação
+        usable_w * 0.28,  # Identificação
 
         usable_w * 0.09,  # Telefone
 
@@ -403,11 +403,11 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
 
         usable_w * 0.11,  # Apresentação
 
-        usable_w * 0.07,  # Função/Cota
+        usable_w * 0.09,  # Função/Cota
 
         usable_w * 0.07,  # Viatura
 
-        usable_w * 0.21,  # Anotações
+        usable_w * 0.15,  # Anotações
     ]
 
     # =========================================================================

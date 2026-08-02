@@ -768,8 +768,21 @@ export class EscalaService {
       .leftJoinAndSelect('operacao.evento', 'evento')
       .leftJoinAndSelect('e.presencaConfirmadaPor', 'confirmador')
       .where('e.operacao_id = :operacaoId', { operacaoId })
-      .orderBy('e.data_inicio', 'ASC')
-      .addOrderBy('e.hora_inicio', 'ASC')
+      .orderBy('e.data_inicio', 'DESC')
+      .addOrderBy('e.hora_inicio', 'DESC')
+      .addOrderBy(
+        `
+    CASE e.funcao
+      WHEN 'FISCAL' THEN 1
+      WHEN 'MOT'    THEN 2
+      WHEN 'PAT'    THEN 3
+      WHEN 'CMT'    THEN 4
+      WHEN 'POG'    THEN 5
+      WHEN 'AUX'    THEN 6
+      ELSE               7
+    END
+    `,
+      )
       .getMany();
 
     // Busca todos os SGPs dos confirmadores de uma vez
