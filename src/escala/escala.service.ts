@@ -874,7 +874,7 @@ export class EscalaService {
   ): Promise<{ buffer: Buffer; cod_op: string }> {
     const [dto, operacao] = await Promise.all([
       this.findByOperacao(operacaoId),
-      this.operacaoRepo.findOneBy({ id: operacaoId }), // ← busca direta
+      this.operacaoRepo.findOneBy({ id: operacaoId }),
     ]);
 
     const payload = JSON.stringify({ ...dto, operacaoId });
@@ -890,17 +890,28 @@ export class EscalaService {
     const cod_op = operacao?.cod_op ?? `op${operacaoId}`;
     const outputPath = path.join(tmpdir(), `COP_${cod_op}.pdf`);
 
+    // Payload vai para arquivo temporário — passá-lo como argumento de CLI
+    // estoura o ARG_MAX do SO quando há muitas escalas, causando "spawn E2BIG".
+    const inputPath = path.join(
+      tmpdir(),
+      `COP_${cod_op}_input_${Date.now()}.json`,
+    );
+
     try {
+      fs.writeFileSync(inputPath, payload, 'utf-8');
+
       await execFileAsync('python3', [
         SCRIPT_PATH,
-        payload,
+        inputPath,
         matUsuario,
         outputPath,
       ]);
+
       const buffer = fs.readFileSync(outputPath);
-      return { buffer, cod_op }; // ← retorna os dois
+      return { buffer, cod_op };
     } finally {
       if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+      if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
     }
   }
 

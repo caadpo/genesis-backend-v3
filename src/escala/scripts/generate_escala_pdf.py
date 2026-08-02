@@ -627,38 +627,25 @@ def build_pdf(payload: dict, mat_usuario: str, output_path: str) -> None:
 
 if __name__ == '__main__':
 
-    # Verifica se os parâmetros foram enviados
     if len(sys.argv) < 4:
-
         print(
-            'Uso: python generate_escala_pdf.py <json> <mat> <output>',
+            'Uso: python generate_escala_pdf.py <input_json_path> <mat> <output>',
             file=sys.stderr
         )
-
         sys.exit(1)
 
-    # =========================================================================
-    # LEITURA DOS PARÂMETROS
-    # =========================================================================
-
-    payload = json.loads(sys.argv[1])
-
+    input_path = sys.argv[1]
     mat_usuario = sys.argv[2]
-
     output_pdf = sys.argv[3]
 
-    # =========================================================================
-    # CHAMA FUNÇÃO DE GERAÇÃO
-    # =========================================================================
+    # Lê o payload do arquivo em vez de receber como argumento de CLI
+    with open(input_path, 'r', encoding='utf-8') as f:
+        payload = json.load(f)
 
     build_pdf(
         payload,
         mat_usuario,
         output_pdf
     )
-
-    # =========================================================================
-    # MENSAGEM FINAL
-    # =========================================================================
 
     print(f'PDF gerado em: {output_pdf}')
