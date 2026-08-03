@@ -769,7 +769,7 @@ export class EscalaService {
       .leftJoinAndSelect('e.presencaConfirmadaPor', 'confirmador')
       .where('e.operacao_id = :operacaoId', { operacaoId })
       .orderBy('e.data_inicio', 'DESC')
-      .addOrderBy('e.hora_inicio', 'DESC')
+      .addOrderBy('e.hora_inicio', 'ASC')
       .addOrderBy(
         `
     CASE e.funcao
