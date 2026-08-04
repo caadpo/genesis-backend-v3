@@ -140,6 +140,36 @@ export class OperacaoService {
     return cod;
   }
 
+  // ─── Atualização de cod_op ──────────────────────────────────────────────────────
+
+  async updateCodOp(
+    id: number,
+    novoCodOp: string,
+    authUser: { id: number; typeUser: UserType },
+  ): Promise<Operacao> {
+    const operacao = await this.findOne(id);
+
+    this.validarStatusEvento(operacao.evento);
+    await this.validarPermissaoOme(authUser, operacao.evento.ome.id);
+
+    if (operacao.cod_op === novoCodOp) {
+      return operacao;
+    }
+
+    const existente = await this.operacaoRepo.findOne({
+      where: { cod_op: novoCodOp },
+    });
+
+    if (existente) {
+      throw new BadRequestException(
+        `O código "${novoCodOp}" já está em uso por outra operação.`,
+      );
+    }
+
+    operacao.cod_op = novoCodOp;
+    return this.operacaoRepo.save(operacao);
+  }
+
   // ─── CRUD ───────────────────────────────────────────────────────────────────
 
   async create(
@@ -248,9 +278,26 @@ export class OperacaoService {
   ) {
     const operacao = await this.findOne(id);
 
-    this.validarStatusEvento(operacao.evento);
+    const eventoBloqueado = operacao.evento.status_evento !== 'CRIADO';
 
-    // ✅ Auxiliar só pode editar operações de eventos da sua OME
+    // ✅ Quando o evento está bloqueado, só permite editar as cotas
+    // (qtd_oficiais_oper / qtd_pracas_oper) — tudo o mais é rejeitado.
+    if (eventoBloqueado) {
+      const camposNaoPermitidos = (
+        ['nome_operacao', 'evento_id', 'ome_id'] as const
+      ).filter((campo) => dto[campo] !== undefined);
+
+      if (camposNaoPermitidos.length > 0) {
+        throw new ForbiddenException(
+          `Evento com status "${operacao.evento.status_evento}" só permite ajustar as cotas (oficiais/praças) da operação.`,
+        );
+      }
+    } else {
+      // Fluxo normal: evento em CRIADO permite qualquer edição
+      this.validarStatusEvento(operacao.evento);
+    }
+
+    // ✅ Auxiliar só pode editar operações de eventos da sua OME (vale nos dois casos)
     await this.validarPermissaoOme(authUser, operacao.evento.ome.id);
 
     const novoEventoId = dto.evento_id ?? operacao.evento.id;
@@ -277,7 +324,11 @@ export class OperacaoService {
 
     let resumo: ReturnOperacaoResumoDto;
 
-    if (dto.evento_id && dto.evento_id !== operacao.evento.id) {
+    if (
+      !eventoBloqueado &&
+      dto.evento_id &&
+      dto.evento_id !== operacao.evento.id
+    ) {
       const novoEvento = await this.eventoRepo.findOne({
         where: { id: dto.evento_id },
         relations: ['ome'],
@@ -307,13 +358,14 @@ export class OperacaoService {
       );
     }
 
-    if (dto.ome_id) {
+    // ✅ Só permite alterar OME/nome_operacao quando o evento não está bloqueado
+    if (!eventoBloqueado && dto.ome_id) {
       const ome = await this.omeRepo.findOneBy({ id: dto.ome_id });
       if (!ome) throw new NotFoundException('OME não encontrada');
       operacao.ome = ome;
     }
 
-    if (dto.nome_operacao !== undefined) {
+    if (!eventoBloqueado && dto.nome_operacao !== undefined) {
       operacao.nome_operacao = dto.nome_operacao;
     }
 

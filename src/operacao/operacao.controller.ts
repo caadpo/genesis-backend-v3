@@ -20,11 +20,22 @@ import { UserType } from 'src/user/enum/user-type.enum';
 import { OperacaoService } from './operacao.service';
 import { CreateOperacaoDto } from './dtos/create-operacao.dto';
 import { UpdateOperacaoDto } from './dtos/update-operacao.dto';
+import { UpdateCodOpDto } from './dtos/update-cod-op.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('operacao')
 export class OperacaoController {
   constructor(private readonly service: OperacaoService) {}
+
+  @Patch(':id/cod-op')
+  @Roles(UserType.AUXILIAR, UserType.TECNICO, UserType.MASTER)
+  updateCodOp(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateCodOpDto,
+    @Request() req: any,
+  ) {
+    return this.service.updateCodOp(id, dto.cod_op, req.user);
+  }
 
   @Post()
   @Roles(UserType.AUXILIAR, UserType.TECNICO, UserType.MASTER)
