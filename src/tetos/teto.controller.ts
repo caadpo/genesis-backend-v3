@@ -88,6 +88,21 @@ export class TetosController {
     return this.tetoService.encerrar(id);
   }
 
+  @Patch(':id/prestar-contas')
+  @Roles(UserType.MASTER)
+  prestarContas(@Param('id', ParseIntPipe) id: number): Promise<ReturnTetoDto> {
+    return this.tetoService.prestarContas(id);
+  }
+
+  // opcional, se quiser permitir desfazer
+  @Patch(':id/desfazer-prestacao-contas')
+  @Roles(UserType.MASTER)
+  desfazerPrestacaoContas(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ReturnTetoDto> {
+    return this.tetoService.desfazerPrestacaoContas(id);
+  }
+
   @Delete(':id')
   @Roles(UserType.MASTER)
   remove(@Param('id', ParseIntPipe) id: number): Promise<void> {

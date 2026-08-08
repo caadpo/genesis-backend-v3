@@ -69,6 +69,11 @@ export class CreateTetosTable1775441760604 implements MigrationInterface {
             default: `'ABERTO'`,
           },
           {
+            name: 'data_prestacao_contas',
+            type: 'timestamp',
+            isNullable: true,
+          },
+          {
             name: 'created_at',
             type: 'timestamp',
             default: 'now()',

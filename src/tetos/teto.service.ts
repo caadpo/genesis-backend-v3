@@ -1,10 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Sistema, Teto } from './entities/teto.entity';
 import { StatusTeto } from './enum/teto-type.enum';
 import { EscalaEntity } from 'src/escala/entities/escala.entity';
 import { ReturnTetoDto } from './dtos/return-teto.dto';
+
 import ExcelJS from 'exceljs';
 import path from 'path/win32';
 
@@ -32,6 +37,7 @@ export class TetoService {
       data_fim: t.data_fim,
       tipo_periodo: t.tipo_periodo,
       status: t.status,
+      data_prestacao_contas: t.data_prestacao_contas ?? null,
       created_at: t.created_at,
       updated_at: t.updated_at,
     };
@@ -51,6 +57,7 @@ export class TetoService {
       data_fim: raw.data_fim,
       tipo_periodo: raw.tipo_periodo,
       status: raw.status,
+      data_prestacao_contas: raw.data_prestacao_contas ?? null,
       created_at: raw.created_at,
       updated_at: raw.updated_at,
     };
@@ -87,6 +94,7 @@ export class TetoService {
         .addSelect('t.data_fim', 'data_fim')
         .addSelect('t.tipo_periodo', 'tipo_periodo')
         .addSelect('t.status', 'status')
+        .addSelect('t.data_prestacao_contas', 'data_prestacao_contas')
         .addSelect('t.created_at', 'created_at')
         .addSelect('t.updated_at', 'updated_at')
 
@@ -384,6 +392,35 @@ export class TetoService {
     await this.tetoRepository.update(id, {
       status: StatusTeto.ENCERRADO,
     });
+    return this.findOne(id);
+  }
+
+  async prestarContas(id: number): Promise<ReturnTetoDto> {
+    const teto = await this.tetoRepository.findOne({ where: { id } });
+    if (!teto) throw new NotFoundException('Teto não encontrado');
+
+    if (teto.data_prestacao_contas) {
+      throw new BadRequestException(
+        'Este teto já possui prestação de contas registrada.',
+      );
+    }
+
+    await this.tetoRepository.update(id, {
+      data_prestacao_contas: new Date(),
+    });
+
+    return this.findOne(id);
+  }
+
+  // opcional: permitir desfazer, caso registre por engano
+  async desfazerPrestacaoContas(id: number): Promise<ReturnTetoDto> {
+    const teto = await this.tetoRepository.findOne({ where: { id } });
+    if (!teto) throw new NotFoundException('Teto não encontrado');
+
+    await this.tetoRepository.update(id, {
+      data_prestacao_contas: null,
+    });
+
     return this.findOne(id);
   }
 

@@ -14,6 +14,7 @@ export class ReturnTetoDto {
   data_fim?: string;
   tipo_periodo!: TipoPeriodo;
   status!: StatusTeto;
+  data_prestacao_contas!: Date | null;
   qtd_dist_of!: number;
   qtd_dist_prc!: number;
   saldo_of!: number;

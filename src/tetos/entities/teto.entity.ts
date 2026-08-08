@@ -59,6 +59,13 @@ export class Teto {
   })
   status!: StatusTeto;
 
+  @Column({
+    name: 'data_prestacao_contas',
+    type: 'timestamp',
+    nullable: true,
+  })
+  data_prestacao_contas?: Date | null;
+
   @CreateDateColumn({ type: 'timestamp' })
   created_at!: Date;
 

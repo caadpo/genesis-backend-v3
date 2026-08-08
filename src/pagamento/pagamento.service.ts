@@ -141,14 +141,18 @@ export class PagamentoService {
       .addSelect('COUNT(DISTINCT p.usuario_id)', 'total_policiais')
       .addSelect('SUM(p.valor_total)', 'valor_total_evento')
       .addSelect('MIN(p.created_at)', 'createdAt')
+      .addSelect('t.data_prestacao_contas', 'data_prestacao_contas') // 👈 novo
       .innerJoin('evento', 'ev', 'ev.id = p.evento_id')
       .innerJoin('ome', 'ome', 'ome.id = ev.ome_id')
+      .leftJoin('ev.distribuicao', 'd') // 👈 novo
+      .leftJoin('d.teto', 't') // 👈 novo
       .where("p.sistema = 'DIARIAS'")
       .groupBy('p.evento_id')
       .addGroupBy('ev.nome_evento')
       .addGroupBy('ome.nomeOme')
       .addGroupBy('p.sistema')
       .addGroupBy('p.nome_verba')
+      .addGroupBy('t.data_prestacao_contas') // 👈 novo
       .orderBy('MIN(p.created_at)', 'DESC');
 
     if (limit) qbDiarias.limit(limit);
@@ -177,7 +181,8 @@ export class PagamentoService {
         'total_policiais',
       )
       .addSelect('t.valor_total', 'valor_total_evento')
-      .addSelect('t.updated_at', 'createdAt') // usa data de encerramento
+      .addSelect('t.updated_at', 'createdAt')
+      .addSelect('t.data_prestacao_contas', 'data_prestacao_contas')
       .where('t.sistema = :sistema', { sistema: 'PJES' })
       .andWhere('t.status = :status', { status: StatusTeto.ENCERRADO })
       .orderBy('t.updated_at', 'DESC')
@@ -220,6 +225,7 @@ export class PagamentoService {
       total_policiais: Number(r.total_policiais),
       valor_total_evento: Number(r.valor_total_evento),
       createdAt: r.createdAt,
+      data_prestacao_contas: r.data_prestacao_contas ?? null,
     }));
 
     // ── 5. Formata resultados DIARIAS ─────────────────────────────────────────
@@ -233,6 +239,7 @@ export class PagamentoService {
       total_policiais: Number(r.total_policiais),
       valor_total_evento: Number(r.valor_total_evento),
       createdAt: r.createdAt,
+      data_prestacao_contas: r.data_prestacao_contas ?? null,
     }));
 
     // ── 6. Unifica, ordena por data desc e aplica limit ───────────────────────
