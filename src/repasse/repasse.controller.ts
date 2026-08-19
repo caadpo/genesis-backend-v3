@@ -21,6 +21,24 @@ import { UserType } from 'src/user/enum/user-type.enum';
 export class RepasseController {
   constructor(private readonly service: RepasseService) {}
 
+  // ─── Contar repasses disponíveis (leve, para badge) ───────────────────────────
+  @Get('disponiveis/count')
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.AUXILIAR,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.COMUN,
+    UserType.DIRETOR,
+    UserType.ESTRATEGICO,
+  )
+  countDisponiveis(@Request() req: any) {
+    return this.service
+      .countAbertosParaMimCached(req.user, req.user.tipoEscala)
+      .then((count) => ({ count }));
+  }
+
   // ─── Criar repasse (ofertante anuncia que quer repassar) ─────────────────────
   @Post()
   @Roles(

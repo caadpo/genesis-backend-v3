@@ -151,6 +151,79 @@ export class UserService {
     };
   }
 
+  async listUsuariosEspeciais(limit?: number): Promise<UserSearchDto[]> {
+    const qb = this.userRepository
+      .createQueryBuilder('u')
+      .leftJoin('u.ome', 'ome')
+      .leftJoin(DadosSgpEntity, 'dsgp', 'dsgp.matsgp = u.mat')
+      .leftJoin('u.conta', 'conta')
+      .select([
+        'u.id          AS id',
+        'u.imagem_url  AS "imagemUrl"',
+        'u.mat         AS mat',
+        'u.phone       AS phone',
+        'u.ativo       AS ativo',
+        'u.type_user   AS "typeUser"',
+        'dsgp.pgsgp         AS pg',
+        'dsgp.nomeguerrasgp AS "nomeGuerra"',
+        'dsgp.tiposgp       AS tipo',
+        'dsgp.cpfsgp        AS cpf',
+        'dsgp.nunfuncsgp    AS nunfunc',
+        'dsgp.nunvincsgp    AS nunvinc',
+        'dsgp.situacaosgp   AS "situacao"',
+        'dsgp.nomecompletosgp AS "nomeCompleto"',
+        'dsgp.localapresentacaosgp AS "localApresentacao"',
+        'ome.id      AS "ome.id"',
+        'ome.nomeome AS "ome.nomeOme"',
+        'conta.id      AS "conta.id"',
+        'conta.banco   AS "conta.banco"',
+        'conta.cod_banco   AS "conta.cod_banco"',
+        'conta.agencia AS "conta.agencia"',
+        'conta.conta   AS "conta.conta"',
+        'conta.dig_conta   AS "conta.dig_conta"',
+      ])
+      .where('u.type_user != :comun', { comun: UserType.COMUN })
+      .andWhere('u.ativo = true') // remova se quiser mostrar inativos também
+      .orderBy('RANDOM()');
+
+    if (limit) {
+      qb.limit(limit);
+    }
+
+    const rows = await qb.getRawMany<any>();
+
+    return rows.map((raw) => ({
+      id: raw.id,
+      imagemUrl: raw.imagemUrl,
+      mat: raw.mat,
+      phone: raw.phone,
+      ativo: raw.ativo,
+      typeUser: raw.typeUser,
+      pg: raw.pg,
+      nomeGuerra: raw.nomeGuerra,
+      tipo: raw.tipo,
+      cpf: raw.cpf,
+      nunfunc: raw.nunfunc,
+      nunvinc: raw.nunvinc,
+      nomeCompleto: raw.nomeCompleto,
+      localApresentacao: raw.localApresentacao,
+      situacao: raw.situacao ?? '',
+      ome: raw['ome.id']
+        ? { id: raw['ome.id'], nomeOme: raw['ome.nomeOme'] }
+        : undefined,
+      conta: raw['conta.id']
+        ? {
+            id: raw['conta.id'],
+            banco: raw['conta.banco'],
+            cod_banco: raw['conta.cod_banco'],
+            agencia: raw['conta.agencia'],
+            conta: raw['conta.conta'],
+            dig_conta: raw['conta.dig_conta'],
+          }
+        : undefined,
+    }));
+  }
+
   async createUser(dto: CreateUserDto): Promise<UserEntity> {
     const ome = await this.omeRepository.findOne({ where: { id: dto.omeId } });
     if (!ome) throw new NotFoundException('OME não encontrada');

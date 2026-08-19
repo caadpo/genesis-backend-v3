@@ -46,6 +46,26 @@ export class UserController {
     return this.userService.findByMatOrNomeGuerra(q);
   }
 
+  @Get('especiais')
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.DIRETOR,
+    UserType.AUXILIAR,
+    UserType.ESTRATEGICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.GESTOR_VERBA,
+    UserType.COMUN,
+  )
+  async listUsuariosEspeciais(
+    @Query('limit') limit?: string,
+  ): Promise<UserSearchDto[]> {
+    return this.userService.listUsuariosEspeciais(
+      limit ? Number(limit) : undefined,
+    );
+  }
+
   @Get(':id')
   async getUser(@Param('id') id: number): Promise<UserEntity> {
     return this.userService.findById(id);

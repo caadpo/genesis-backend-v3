@@ -17,6 +17,37 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class RepasseService {
+  private readonly countCache = new Map<
+    number,
+    { count: number; expiresAt: number }
+  >();
+  private readonly COUNT_CACHE_TTL_MS = 2000;
+
+  async countAbertosParaMimCached(
+    usuarioLogado: {
+      id: number;
+      mat: string;
+      omeId: number;
+    },
+    tipoEscalaJwt?: string,
+  ): Promise<number> {
+    const cached = this.countCache.get(usuarioLogado.id);
+    const now = Date.now();
+
+    if (cached && cached.expiresAt > now) {
+      return cached.count;
+    }
+
+    const count = await this.countAbertosParaMim(usuarioLogado, tipoEscalaJwt);
+
+    this.countCache.set(usuarioLogado.id, {
+      count,
+      expiresAt: now + this.COUNT_CACHE_TTL_MS,
+    });
+
+    return count;
+  }
+
   constructor(
     @InjectRepository(RepasseEntity)
     private readonly repo: Repository<RepasseEntity>,
@@ -95,6 +126,48 @@ export class RepasseService {
         );
       }
     }
+  }
+
+  // ─── CONTAR REPASSES DISPONÍVEIS (para badge — leve, sem SGP) ────────────────
+  async countAbertosParaMim(
+    usuarioLogado: {
+      id: number;
+      mat: string;
+      omeId: number;
+    },
+    tipoEscalaJwt?: string,
+  ): Promise<number> {
+    let tipoEscala = tipoEscalaJwt;
+    if (!tipoEscala) {
+      const sgp = await this.dadosSgpRepo.findOne({
+        where: { matSgp: usuarioLogado.mat },
+        select: { tipoSgp: true },
+      });
+      tipoEscala = sgp?.tipoSgp ?? 'P';
+    }
+
+    return this.repo
+      .createQueryBuilder('r')
+      .leftJoin('r.escala', 'escala')
+      .leftJoin('escala.operacao', 'operacao')
+      .leftJoin('operacao.evento', 'evento')
+      .where('r.status_repasse = :status', { status: StatusRepasse.ABERTO })
+      .andWhere('r.tipo_escala_repasse = :tipo', { tipo: tipoEscala })
+      .andWhere('r.ofertante_id != :userId', { userId: usuarioLogado.id })
+      .andWhere('evento.ome_id = :omeId', { omeId: usuarioLogado.omeId })
+      .andWhere(
+        `(r.data_inicio_repasse::text || ' ' || r.hora_inicio_repasse::text)::timestamp > NOW()`,
+      )
+      .andWhere(
+        `NOT EXISTS (
+        SELECT 1 FROM escala e
+        WHERE e.mat_escala = :mat
+          AND e.data_inicio = r.data_inicio_repasse
+          AND e.sistema = r.sistema_repasse::escala_sistema_enum
+      )`,
+        { mat: usuarioLogado.mat },
+      )
+      .getCount();
   }
 
   // ─── CRIAR REPASSE ──────────────────────────────────────────────────────────
@@ -513,11 +586,6 @@ WHERE e.mat_escala = :mat
           .select(['sgp.pgSgp', 'sgp.nomeGuerraSgp', 'sgp.situacaoSgp'])
           .where('sgp.matSgp = :mat', { mat: r.matOfertante })
           .getOne();
-
-        console.log(
-          `Buscando SGP para mat ${r.matOfertante} (findAll):`,
-          sgpOfertante,
-        );
 
         let sgpReceptor: any = null;
         if (r.receptor) {
