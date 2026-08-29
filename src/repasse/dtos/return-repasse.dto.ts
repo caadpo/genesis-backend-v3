@@ -22,6 +22,7 @@ export class ReturnRepasseDto {
   nome_operacao: string;
   funcao: string;
   localApresentacao: string;
+  anotacoes: string | null;
   ofertante_img: string;
   ofertante_pg: string;
   ofertante_nome_guerra: string;
@@ -64,6 +65,7 @@ export class ReturnRepasseDto {
     this.nome_operacao = r.escala?.operacao?.nome_operacao || '';
     this.funcao = r.escala?.funcao || '';
     this.localApresentacao = r.escala?.localApresentacao || '';
+    this.anotacoes = r.escala?.anotacoes || null;
     this.ofertante_img = r.ofertante?.imagemUrl || '';
     this.ofertante_pg = sgpOfertante?.pgSgp || '';
     this.ofertante_nome_guerra = sgpOfertante?.nomeGuerraSgp || '';
