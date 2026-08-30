@@ -5,6 +5,7 @@ import {
   Patch,
   Param,
   Body,
+  Query,
   ParseIntPipe,
   UseGuards,
   Request,
@@ -16,138 +17,78 @@ import { RolesGuard } from 'src/guards/roles.guard';
 import { Roles } from 'src/decorators/roles.decorator';
 import { UserType } from 'src/user/enum/user-type.enum';
 
+const TODOS_TIPOS = [
+  UserType.MASTER,
+  UserType.TECNICO,
+  UserType.AUXILIAR,
+  UserType.FINANCEIRO,
+  UserType.PD,
+  UserType.COMUN,
+  UserType.DIRETOR,
+  UserType.ESTRATEGICO,
+];
+
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('repasse')
 export class RepasseController {
   constructor(private readonly service: RepasseService) {}
 
-  // ─── Contar repasses disponíveis (leve, para badge) ───────────────────────────
   @Get('disponiveis/count')
-  @Roles(
-    UserType.MASTER,
-    UserType.TECNICO,
-    UserType.AUXILIAR,
-    UserType.FINANCEIRO,
-    UserType.PD,
-    UserType.COMUN,
-    UserType.DIRETOR,
-    UserType.ESTRATEGICO,
-  )
+  @Roles(...TODOS_TIPOS)
   countDisponiveis(@Request() req: any) {
     return this.service
       .countAbertosParaMimCached(req.user, req.user.tipoEscala)
       .then((count) => ({ count }));
   }
 
-  // ─── Criar repasse (ofertante anuncia que quer repassar) ─────────────────────
   @Post()
-  @Roles(
-    UserType.MASTER,
-    UserType.TECNICO,
-    UserType.AUXILIAR,
-    UserType.FINANCEIRO,
-    UserType.PD,
-    UserType.COMUN,
-    UserType.DIRETOR,
-    UserType.ESTRATEGICO,
-  )
+  @Roles(...TODOS_TIPOS)
   create(@Body() dto: CreateRepasseDto, @Request() req: any) {
     return this.service.create(dto, req.user);
   }
 
-  // ─── Aceitar repasse (receptor pega o serviço) ────────────────────────────────
   @Patch(':id/aceitar')
-  @Roles(
-    UserType.MASTER,
-    UserType.TECNICO,
-    UserType.AUXILIAR,
-    UserType.FINANCEIRO,
-    UserType.PD,
-    UserType.COMUN,
-    UserType.DIRETOR,
-    UserType.ESTRATEGICO,
-  )
+  @Roles(...TODOS_TIPOS)
   aceitar(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
     return this.service.aceitar(id, req.user);
   }
 
-  // ─── Cancelar repasse (ofertante desiste) ─────────────────────────────────────
   @Patch(':id/cancelar')
-  @Roles(
-    UserType.MASTER,
-    UserType.TECNICO,
-    UserType.AUXILIAR,
-    UserType.FINANCEIRO,
-    UserType.PD,
-    UserType.COMUN,
-    UserType.DIRETOR,
-    UserType.ESTRATEGICO,
-  )
+  @Roles(...TODOS_TIPOS)
   cancelar(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
     return this.service.cancelar(id, req.user);
   }
 
-  // ─── Listar TODOS os repasses (administrativo) ────────────────────────────────
   @Get()
-  @Roles(
-    UserType.MASTER,
-    UserType.TECNICO,
-    UserType.AUXILIAR,
-    UserType.FINANCEIRO,
-    UserType.PD,
-    UserType.COMUN,
-    UserType.DIRETOR,
-    UserType.ESTRATEGICO,
-  )
+  @Roles(...TODOS_TIPOS)
   findAll() {
     return this.service.findAll();
   }
 
-  // ─── Listar repasses disponíveis para o usuário logado ───────────────────────
   @Get('disponiveis')
-  @Roles(
-    UserType.MASTER,
-    UserType.TECNICO,
-    UserType.AUXILIAR,
-    UserType.FINANCEIRO,
-    UserType.PD,
-    UserType.COMUN,
-    UserType.DIRETOR,
-    UserType.ESTRATEGICO,
-  )
+  @Roles(...TODOS_TIPOS)
   findDisponiveis(@Request() req: any) {
-    // ✅ passa undefined quando não existir — o service busca no banco
     return this.service.findAbertosParaMim(req.user, req.user.tipoEscala);
   }
 
-  // ─── Meus repasses ofertados ──────────────────────────────────────────────────
   @Get('meus')
-  @Roles(
-    UserType.MASTER,
-    UserType.TECNICO,
-    UserType.AUXILIAR,
-    UserType.FINANCEIRO,
-    UserType.PD,
-    UserType.COMUN,
-    UserType.DIRETOR,
-    UserType.ESTRATEGICO,
-  )
+  @Roles(...TODOS_TIPOS)
   findMeus(@Request() req: any) {
     return this.service.findMeusRepasses(req.user);
   }
 
-  // ─── Buscar repasse por id ────────────────────────────────────────────────────
+  @Get('buscar-usuario')
+  @Roles(...TODOS_TIPOS)
+  buscarUsuario(@Query('q') q: string, @Request() req: any) {
+    return this.service.buscarUsuariosParaRepasse(
+      q ?? '',
+      req.user,
+      req.user.tipoEscala, // ✅ NOVO
+    );
+  }
+
   @Get(':id')
-  @Roles(
-    UserType.MASTER,
-    UserType.TECNICO,
-    UserType.AUXILIAR,
-    UserType.FINANCEIRO,
-    UserType.PD,
-    UserType.COMUN,
-    UserType.DIRETOR,
-    UserType.ESTRATEGICO,
-  )
+  @Roles(...TODOS_TIPOS)
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);
   }

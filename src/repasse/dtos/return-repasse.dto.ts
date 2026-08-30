@@ -5,6 +5,7 @@ export class ReturnRepasseDto {
   escalaId: number;
   ofertanteId: number;
   receptorId: number | null;
+  destinatarioId: number | null; // ✅ NOVO
   statusRepasse: StatusRepasse;
   sistemaRepasse: string;
   tipoEscalaRepasse: string;
@@ -12,11 +13,11 @@ export class ReturnRepasseDto {
   horaInicioRepasse: string;
   horaFimRepasse: string;
   matOfertante: string;
+  matDestinatario: string | null; // ✅ NOVO
   motivo: string | null;
   createdAt: Date;
   updatedAt: Date;
 
-  // Additional fields
   nome_evento: string;
   nome_ome: string;
   nome_operacao: string;
@@ -48,6 +49,7 @@ export class ReturnRepasseDto {
     this.escalaId = r.escala?.id;
     this.ofertanteId = r.ofertante?.id;
     this.receptorId = r.receptor?.id ?? null;
+    this.destinatarioId = r.destinatario?.id ?? null; // ✅ NOVO
     this.statusRepasse = r.statusRepasse;
     this.sistemaRepasse = r.sistemaRepasse;
     this.tipoEscalaRepasse = r.tipoEscalaRepasse;
@@ -55,11 +57,11 @@ export class ReturnRepasseDto {
     this.horaInicioRepasse = r.horaInicioRepasse;
     this.horaFimRepasse = r.horaFimRepasse;
     this.matOfertante = r.matOfertante;
+    this.matDestinatario = r.matDestinatario ?? null; // ✅ NOVO
     this.motivo = r.motivo;
     this.createdAt = r.createdAt;
     this.updatedAt = r.updatedAt;
 
-    // Additional fields
     this.nome_evento = r.escala?.operacao?.evento?.nome_evento || '';
     this.nome_ome = r.escala?.operacao?.evento?.ome?.nomeOme || '';
     this.nome_operacao = r.escala?.operacao?.nome_operacao || '';

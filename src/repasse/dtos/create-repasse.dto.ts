@@ -1,4 +1,3 @@
-// ─── create-repasse.dto.ts ────────────────────────────────────────────────────
 import { IsInt, IsOptional, IsString } from 'class-validator';
 
 export class CreateRepasseDto {
@@ -8,11 +7,11 @@ export class CreateRepasseDto {
   @IsOptional()
   @IsString()
   motivo?: string;
+
+  // ✅ NOVO — mat do usuário escolhido. Se vazio/ausente, repasse é comum.
+  @IsOptional()
+  @IsString()
+  matDestinatario?: string;
 }
 
-// ─── aceitar-repasse.dto.ts ───────────────────────────────────────────────────
-// (arquivo separado em produção — agrupado aqui por praticidade)
-export class AceitarRepasseDto {
-  // Sem campos obrigatórios: o receptor é o usuário logado
-  // Mantido como DTO vazio para extensão futura (ex: comentário do receptor)
-}
+export class AceitarRepasseDto {}

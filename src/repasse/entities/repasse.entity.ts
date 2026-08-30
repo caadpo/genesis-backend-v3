@@ -12,29 +12,33 @@ import { EscalaEntity } from 'src/escala/entities/escala.entity';
 import { UserEntity } from 'src/user/entities/user.entity';
 
 export enum StatusRepasse {
-  ABERTO = 'ABERTO', // aguardando alguém pegar
-  ACEITO = 'ACEITO', // outro usuário aceitou
-  CANCELADO = 'CANCELADO', // ninguém pegou até a data/hora do serviço
+  ABERTO = 'ABERTO',
+  ACEITO = 'ACEITO',
+  CANCELADO = 'CANCELADO',
 }
 
-// ✅ Uma escala só pode ter um repasse ativo (ABERTO) por vez
 @Index(['escala', 'statusRepasse'], { unique: false })
 @Entity('repasse')
 export class RepasseEntity {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  // ─── Escala sendo repassada ───────────────────────────────────────────────
   @ManyToOne(() => EscalaEntity, { nullable: false, eager: false })
   @JoinColumn({ name: 'escala_id' })
   escala!: EscalaEntity;
 
-  // ─── Quem está oferecendo o repasse ──────────────────────────────────────
   @ManyToOne(() => UserEntity, { nullable: false, eager: false })
   @JoinColumn({ name: 'ofertante_id' })
   ofertante!: UserEntity;
 
-  // ─── Quem aceitou (preenchido apenas quando ACEITO) ───────────────────────
+  // ✅ NOVO — destinatário escolhido pelo ofertante (repasse direcionado)
+  @ManyToOne(() => UserEntity, { nullable: true, eager: false })
+  @JoinColumn({ name: 'destinatario_id' })
+  destinatario!: UserEntity | null;
+
+  @Column({ type: 'varchar', name: 'mat_destinatario', nullable: true })
+  matDestinatario!: string | null;
+
   @ManyToOne(() => UserEntity, { nullable: true, eager: false })
   @JoinColumn({ name: 'receptor_id' })
   receptor!: UserEntity | null;
@@ -47,13 +51,11 @@ export class RepasseEntity {
   })
   statusRepasse!: StatusRepasse;
 
-  // ─── Snapshot da escala no momento do repasse (evita joins) ──────────────
-  // Guardamos apenas o necessário para listagem rápida
   @Column({ type: 'varchar', name: 'sistema_repasse' })
-  sistemaRepasse!: string; // 'PJES' | 'DIARIAS'
+  sistemaRepasse!: string;
 
   @Column({ type: 'varchar', name: 'tipo_escala_repasse' })
-  tipoEscalaRepasse!: string; // 'P' | 'O'
+  tipoEscalaRepasse!: string;
 
   @Column({ type: 'date', name: 'data_inicio_repasse' })
   dataInicioRepasse!: string;

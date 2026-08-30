@@ -61,7 +61,6 @@ export class RepasseService {
     @InjectRepository(DadosSgpEntity)
     private readonly dadosSgpRepo: Repository<DadosSgpEntity>,
 
-    // ✅ DataSource para transações atômicas (aceitar repasse + update escala)
     private readonly dataSource: DataSource,
   ) {}
 
@@ -128,7 +127,6 @@ export class RepasseService {
     }
   }
 
-  // ─── CONTAR REPASSES DISPONÍVEIS (para badge — leve, sem SGP) ────────────────
   async countAbertosParaMim(
     usuarioLogado: {
       id: number;
@@ -154,6 +152,9 @@ export class RepasseService {
       .where('r.status_repasse = :status', { status: StatusRepasse.ABERTO })
       .andWhere('r.tipo_escala_repasse = :tipo', { tipo: tipoEscala })
       .andWhere('r.ofertante_id != :userId', { userId: usuarioLogado.id })
+      .andWhere('(r.destinatario_id IS NULL OR r.destinatario_id = :userId)', {
+        userId: usuarioLogado.id,
+      })
       .andWhere('evento.ome_id = :omeId', { omeId: usuarioLogado.omeId })
       .andWhere(
         `(r.data_inicio_repasse::text || ' ' || r.hora_inicio_repasse::text)::timestamp > NOW()`,
@@ -170,34 +171,67 @@ export class RepasseService {
       .getCount();
   }
 
-  // ─── CRIAR REPASSE ──────────────────────────────────────────────────────────
-  /**
-   * O usuário logado anuncia que quer repassar uma escala sua.
-   * Regras:
-   *  - A escala deve pertencer ao usuário logado (via mat)
-   *  - O evento ainda deve estar com status 'CRIADO' (mesma lógica do escala.service)
-   *  - Não pode haver outro repasse ABERTO para a mesma escala
-   */
+  async buscarUsuariosParaRepasse(
+    query: string,
+    usuarioLogado: { id: number; omeId: number; mat: string },
+    tipoEscalaJwt?: string,
+  ): Promise<
+    { mat: string; nomeGuerra: string; pg: string; imagemUrl: string | null }[]
+  > {
+    const termo = query.trim();
+    if (termo.length < 6) return [];
+
+    // ─── Resolve o tipo do usuário logado (P ou O) ──────────────────────────────
+    let tipoEscala = tipoEscalaJwt;
+    if (!tipoEscala) {
+      const sgp = await this.dadosSgpRepo.findOne({
+        where: { matSgp: usuarioLogado.mat },
+        select: { tipoSgp: true },
+      });
+      tipoEscala = sgp?.tipoSgp ?? 'P';
+    }
+
+    const usuarios = await this.userRepo
+      .createQueryBuilder('u')
+      .innerJoin(DadosSgpEntity, 'sgp', 'sgp.matsgp = u.mat')
+      .select([
+        'u.id AS id',
+        'u.mat AS mat',
+        'u.imagemUrl AS "imagemUrl"',
+        'sgp.nomeguerrasgp AS "nomeGuerra"',
+        'sgp.pgsgp AS pg',
+      ])
+      .where('u.id != :userId', { userId: usuarioLogado.id })
+      .andWhere('sgp.tiposgp = :tipo', { tipo: tipoEscala }) // ✅ NOVO — mesmo tipo do ofertante
+      .andWhere('u.mat ILIKE :termo', { termo: `${termo}%` })
+      .limit(8)
+      .getRawMany();
+
+    return usuarios.map((u) => ({
+      mat: u.mat,
+      nomeGuerra: u.nomeGuerra ?? '',
+      pg: u.pg ?? '',
+      imagemUrl: u.imagemUrl ?? null,
+    }));
+  }
+
   async create(
     dto: CreateRepasseDto,
     usuarioLogado: { id: number; mat: string; typeUser: number; omeId: number },
   ): Promise<ReturnRepasseDto> {
-    // ✅ Uma query traz a escala + operacao + evento (necessário para verificar status)
     const escala = await this.escalaRepo.findOne({
       where: { id: dto.escalaId },
-      relations: { operacao: { evento: true }, usuario: true },
+      relations: { operacao: { evento: { ome: true } }, usuario: true },
     });
 
     if (!escala) throw new NotFoundException('Escala não encontrada');
 
-    // ─── Pertence ao usuário logado? ──────────────────────────────────────────
     if (escala.usuario.mat !== usuarioLogado.mat) {
       throw new ForbiddenException(
         'Você só pode repassar escalas que pertencem a você',
       );
     }
 
-    // ─── Evento ainda editável? ───────────────────────────────────────────────
     const statusEvento = escala.operacao?.evento?.status_evento;
     if (statusEvento !== 'CRIADO') {
       throw new ForbiddenException(
@@ -205,9 +239,6 @@ export class RepasseService {
       );
     }
 
-    // ─── Já existe repasse ABERTO para essa escala? ───────────────────────────
-    // ✅ índice parcial IDX_repasse_escala_aberto garante unicidade no banco,
-    //    mas verificamos antes para retornar mensagem amigável
     const jaExiste = await this.repo.exists({
       where: {
         escala: { id: dto.escalaId },
@@ -220,10 +251,64 @@ export class RepasseService {
       );
     }
 
+    let destinatario: { id: number } | null = null;
+    let matDestinatario: string | null = null;
+
+    if (dto.matDestinatario?.trim()) {
+      const mat = dto.matDestinatario.trim();
+
+      if (mat === usuarioLogado.mat) {
+        throw new BadRequestException('Você não pode repassar para si mesmo');
+      }
+
+      const [userDestino, sgpDestino] = await Promise.all([
+        this.userRepo.findOne({ where: { mat } }),
+        this.dadosSgpRepo.findOne({ where: { matSgp: mat } }),
+      ]);
+
+      if (!userDestino) {
+        throw new NotFoundException(
+          `Nenhum usuário encontrado com a matrícula ${mat}`,
+        );
+      }
+
+      const tipoDestino = sgpDestino?.tipoSgp ?? 'P';
+      if (tipoDestino !== escala.tipo_escala) {
+        throw new BadRequestException(
+          `Tipo incompatível: a matrícula ${mat} é "${tipoDestino}" e o serviço é para "${escala.tipo_escala}"`,
+        );
+      }
+
+      const conflito = await this.escalaRepo
+        .createQueryBuilder('e')
+        .where('e.mat_escala = :mat', { mat })
+        .andWhere('e.data_inicio = :data', { data: escala.dataInicio })
+        .andWhere('e.sistema = :sistema', { sistema: escala.sistema })
+        .getExists();
+
+      if (conflito) {
+        throw new BadRequestException(
+          `O destinatário já está escalado no dia ${escala.dataInicio} para o sistema ${escala.sistema}`,
+        );
+      }
+
+      await this.verificarLimiteCotasUsuarioRepasse(
+        mat,
+        escala.sistema,
+        escala.operacao.id,
+        escala.cota_escala,
+      );
+
+      destinatario = { id: userDestino.id };
+      matDestinatario = mat;
+    }
+
     const repasse = this.repo.create({
       escala: { id: dto.escalaId },
       ofertante: { id: usuarioLogado.id },
       receptor: null,
+      destinatario,
+      matDestinatario,
       statusRepasse: StatusRepasse.ABERTO,
       sistemaRepasse: escala.sistema,
       tipoEscalaRepasse: escala.tipo_escala,
@@ -238,29 +323,17 @@ export class RepasseService {
     return this.findOne(saved.id);
   }
 
-  // ─── ACEITAR REPASSE ────────────────────────────────────────────────────────
-  /**
-   * O usuário logado aceita um repasse ABERTO.
-   * Regras:
-   *  - Repasse deve estar ABERTO
-   *  - Receptor não pode ser o próprio ofertante
-   *  - tipo_escala deve bater (P só pega de P, O só pega de O)
-   *  - Receptor não pode já estar escalado no mesmo dia + mesmo sistema
-   *  - Tudo ocorre em uma transação atômica:
-   *      1. Atualiza repasse → ACEITO + receptor
-   *      2. Atualiza escala → mat + dados do receptor
-   */
   async aceitar(
     repasseId: number,
     usuarioLogado: { id: number; mat: string; typeUser: number },
   ): Promise<ReturnRepasseDto> {
-    // ─── Busca dados em paralelo: repasse + dados do receptor ─────────────────
     const [repasse, receptor, sgpReceptor] = await Promise.all([
       this.repo.findOne({
         where: { id: repasseId },
         relations: {
           escala: { operacao: { evento: { ome: true } } },
           ofertante: true,
+          destinatario: true,
         },
       }),
 
@@ -269,7 +342,6 @@ export class RepasseService {
         relations: { ome: true, conta: true },
       }),
 
-      // ✅ busca sgp pelo mat do usuário logado (precisamos do tipo_escala real)
       this.dadosSgpRepo
         .createQueryBuilder('sgp')
         .select([
@@ -293,19 +365,22 @@ export class RepasseService {
     if (!receptor)
       throw new NotFoundException('Usuário receptor não encontrado');
 
-    // ─── Repasse ainda está aberto? ───────────────────────────────────────────
     if (repasse.statusRepasse !== StatusRepasse.ABERTO) {
       throw new BadRequestException(
         `Este repasse não está mais disponível (status: ${repasse.statusRepasse})`,
       );
     }
 
-    // ─── Receptor ≠ ofertante ─────────────────────────────────────────────────
     if (repasse.ofertante.id === usuarioLogado.id) {
       throw new ForbiddenException('Você não pode aceitar seu próprio repasse');
     }
 
-    // ─── Evento ainda editável? ───────────────────────────────────────────────
+    if (repasse.destinatario && repasse.destinatario.id !== usuarioLogado.id) {
+      throw new ForbiddenException(
+        'Este repasse foi direcionado a outro usuário',
+      );
+    }
+
     const statusEvento = repasse.escala?.operacao?.evento?.status_evento;
     if (statusEvento !== 'CRIADO') {
       throw new ForbiddenException(
@@ -313,14 +388,16 @@ export class RepasseService {
       );
     }
 
-    // ─── Mesmo OME? ───────────────────────────────────────────────────────────
-    if (receptor.ome.id !== repasse.escala?.operacao?.evento?.ome?.id) {
+    // ─── Mesma OME só é exigida para repasse GERAL (sem destinatário definido) ────
+    if (
+      !repasse.destinatario &&
+      receptor.ome.id !== repasse.escala?.operacao?.evento?.ome?.id
+    ) {
       throw new ForbiddenException(
         'Você só pode aceitar repasses de eventos da sua OME',
       );
     }
 
-    // ─── tipo_escala deve bater ───────────────────────────────────────────────
     const tipoReceptor = sgpReceptor?.tipoSgp ?? 'P';
     if (tipoReceptor !== repasse.tipoEscalaRepasse) {
       throw new ForbiddenException(
@@ -328,8 +405,6 @@ export class RepasseService {
       );
     }
 
-    // ─── Receptor já está escalado no mesmo dia + mesmo sistema? ─────────────
-    // ✅ Usa o índice IDX_escala_mat_data_sistema (unique) para resolver em O(1)
     const conflito = await this.escalaRepo
       .createQueryBuilder('e')
       .where('e.mat_escala = :mat', { mat: usuarioLogado.mat })
@@ -342,8 +417,7 @@ export class RepasseService {
       );
     }
 
-    // ─── Verifica limite de cotas do receptor ─────────────────────────────────
-    const cotaDoRepasse = repasse.escala.cota_escala; // 1 ou 2
+    const cotaDoRepasse = repasse.escala.cota_escala;
     await this.verificarLimiteCotasUsuarioRepasse(
       usuarioLogado.mat,
       repasse.sistemaRepasse,
@@ -351,29 +425,24 @@ export class RepasseService {
       cotaDoRepasse,
     );
 
-    // ─── Transação atômica ────────────────────────────────────────────────────
     await this.dataSource.transaction(async (manager) => {
-      // 1. Atualiza o repasse
       await manager.update(RepasseEntity, repasseId, {
         statusRepasse: StatusRepasse.ACEITO,
         receptor: { id: usuarioLogado.id },
       });
 
-      // 2. Atualiza a escala com os dados do receptor
       await manager.update(EscalaEntity, repasse.escala.id, {
         usuario: { id: usuarioLogado.id },
-        // ─── Snapshot dos dados SGP do receptor no momento do aceite ───
         pg_escala: sgpReceptor?.pgSgp ?? '',
         mat_escala: sgpReceptor?.matSgp ?? usuarioLogado.mat,
         ng_escala: sgpReceptor?.nomeGuerraSgp ?? '',
         tipo_escala: sgpReceptor?.tipoSgp ?? '',
         cpf_escala: sgpReceptor?.cpfSgp ?? '',
-        nomecompleto_escala: sgpReceptor?.nomeCompletoSgp ?? '', // ← precisa adicionar ao select
+        nomecompleto_escala: sgpReceptor?.nomeCompletoSgp ?? '',
         nomeome_escala: receptor.ome?.nomeOme ?? '',
-        nunfunc_escala: sgpReceptor?.nunfuncSgp ?? '', // ← precisa adicionar ao select
-        nunvinc_escala: sgpReceptor?.nunvincSgp ?? '', // ← precisa adicionar ao select
-        situacao: sgpReceptor?.situacaoSgp ?? 'REGULAR', // ← precisa adicionar ao select
-        // ─── Conta e flags ──────────────────────────────────────────────
+        nunfunc_escala: sgpReceptor?.nunfuncSgp ?? '',
+        nunvinc_escala: sgpReceptor?.nunvincSgp ?? '',
+        situacao: sgpReceptor?.situacaoSgp ?? 'REGULAR',
         conta: receptor.conta ? { id: receptor.conta.id } : () => 'NULL',
         isRepasse: true,
         repasseOrigemId: repasseId,
@@ -383,10 +452,6 @@ export class RepasseService {
     return this.findOne(repasseId);
   }
 
-  // ─── CANCELAR REPASSE (pelo ofertante) ──────────────────────────────────────
-  /**
-   * O próprio ofertante desiste de repassar antes que alguém aceite.
-   */
   async cancelar(
     repasseId: number,
     usuarioLogado: { id: number },
@@ -417,19 +482,10 @@ export class RepasseService {
     return this.findOne(repasseId);
   }
 
-  // ─── LISTAR REPASSES ABERTOS (disponíveis para o usuário logado) ────────────
-  /**
-   * Retorna apenas repasses ABERTOS compatíveis com o tipo_escala do receptor,
-   * excluindo os que o próprio usuário ofertou e os dias em que já está escalado.
-   *
-   * ✅ Performático: filtra direto no banco com subquery EXISTS,
-   *    evitando trazer dados desnecessários para o Node.
-   */
   async findAbertosParaMim(
     usuarioLogado: { id: number; mat: string; omeId: number },
-    tipoEscalaJwt?: string, // opcional — pode vir undefined do JWT
+    tipoEscalaJwt?: string,
   ): Promise<ReturnRepasseDto[]> {
-    // ✅ Se não vier no JWT, busca direto no SGP pelo mat do usuário
     let tipoEscala = tipoEscalaJwt;
     if (!tipoEscala) {
       const sgp = await this.dadosSgpRepo.findOne({
@@ -446,11 +502,14 @@ export class RepasseService {
       .leftJoinAndSelect('operacao.evento', 'evento')
       .leftJoinAndSelect('evento.ome', 'ome')
       .leftJoinAndSelect('r.ofertante', 'ofertante')
+      .leftJoinAndSelect('r.destinatario', 'destinatario')
       .where('r.status_repasse = :status', { status: StatusRepasse.ABERTO })
       .andWhere('r.tipo_escala_repasse = :tipo', { tipo: tipoEscala })
       .andWhere('r.ofertante_id != :userId', { userId: usuarioLogado.id })
+      .andWhere('(r.destinatario_id IS NULL OR r.destinatario_id = :userId)', {
+        userId: usuarioLogado.id,
+      })
       .andWhere('evento.ome_id = :omeId', { omeId: usuarioLogado.omeId })
-      // ✅ Não mostra repasses cuja data+hora de início já passou
       .andWhere(
         `(r.data_inicio_repasse::text || ' ' || r.hora_inicio_repasse::text)::timestamp > NOW()`,
       )
@@ -463,12 +522,10 @@ WHERE e.mat_escala = :mat
 )`,
         { mat: usuarioLogado.mat },
       )
-      // ✅ Ordena pela data/hora mais próxima primeiro
       .orderBy('r.data_inicio_repasse', 'ASC')
       .addOrderBy('r.hora_inicio_repasse', 'ASC')
       .getMany();
 
-    // Fetch SGP data for each repasse
     const dtos = await Promise.all(
       repasses.map(async (r) => {
         const sgpOfertante = await this.dadosSgpRepo
@@ -477,14 +534,13 @@ WHERE e.mat_escala = :mat
           .where('sgp.matSgp = :mat', { mat: r.matOfertante })
           .getOne();
 
-        return new ReturnRepasseDto(r, sgpOfertante, null); // receptor is null for open repasses
+        return new ReturnRepasseDto(r, sgpOfertante, null);
       }),
     );
 
     return dtos;
   }
 
-  // ─── LISTAR MEUS REPASSES (ofertados por mim) ───────────────────────────────
   async findMeusRepasses(usuarioLogado: {
     id: number;
   }): Promise<ReturnRepasseDto[]> {
@@ -494,11 +550,11 @@ WHERE e.mat_escala = :mat
         escala: { operacao: { evento: { ome: true } } },
         ofertante: true,
         receptor: true,
+        destinatario: true,
       },
       order: { createdAt: 'DESC' },
     });
 
-    // Fetch SGP data for each repasse
     const dtos = await Promise.all(
       repasses.map(async (r) => {
         const sgpOfertante = await this.dadosSgpRepo
@@ -529,7 +585,6 @@ WHERE e.mat_escala = :mat
     return dtos;
   }
 
-  // ─── FIND ONE ────────────────────────────────────────────────────────────────
   async findOne(id: number): Promise<ReturnRepasseDto> {
     const repasse = await this.repo.findOne({
       where: { id },
@@ -537,18 +592,17 @@ WHERE e.mat_escala = :mat
         escala: { operacao: { evento: { ome: true } } },
         ofertante: true,
         receptor: true,
+        destinatario: true,
       },
     });
     if (!repasse) throw new NotFoundException('Repasse não encontrado');
 
-    // Fetch SGP data for ofertante
     const sgpOfertante = await this.dadosSgpRepo
       .createQueryBuilder('sgp')
       .select(['sgp.pgSgp', 'sgp.nomeGuerraSgp', 'sgp.situacaoSgp'])
       .where('sgp.matSgp = :mat', { mat: repasse.matOfertante })
       .getOne();
 
-    // Fetch SGP data for receptor if exists
     let sgpReceptor: any = null;
     if (repasse.receptor) {
       const receptorMat = await this.userRepo.findOne({
@@ -567,18 +621,17 @@ WHERE e.mat_escala = :mat
     return new ReturnRepasseDto(repasse, sgpOfertante, sgpReceptor);
   }
 
-  // ─── LISTAR TODOS ────────────────────────────────────────────────────────────
   async findAll(): Promise<ReturnRepasseDto[]> {
     const repasses = await this.repo.find({
       relations: {
         escala: { operacao: { evento: { ome: true } } },
         ofertante: true,
         receptor: true,
+        destinatario: true,
       },
-      order: { createdAt: 'DESC' }, // Most recent first
+      order: { createdAt: 'DESC' },
     });
 
-    // Fetch SGP data for each repasse
     const dtos = await Promise.all(
       repasses.map(async (r) => {
         const sgpOfertante = await this.dadosSgpRepo
@@ -609,15 +662,6 @@ WHERE e.mat_escala = :mat
     return dtos;
   }
 
-  // ─── JOB: Expirar repasses não aceitos ──────────────────────────────────────
-  /**
-   * Roda a cada minuto.
-   * Marca como CANCELADO qualquer repasse ABERTO cuja data+hora de início
-   * já passou — ou seja, o serviço já começou e ninguém pegou.
-   *
-   * ✅ UPDATE direto no banco — zero overhead de memória.
-   * ✅ Compara (data_inicio_repasse + hora_inicio_repasse) com NOW() do Postgres.
-   */
   @Cron(CronExpression.EVERY_MINUTE)
   async expirarRepassesVencidos(): Promise<void> {
     await this.repo
