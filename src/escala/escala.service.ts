@@ -200,12 +200,23 @@ export class EscalaService {
     }
   }
 
+  private normalizarHora(hora: string): string {
+    // Garante comparação por HH:mm, ignorando segundos que o Postgres
+    // costuma anexar quando o valor vem da entidade (ex: "07:00:00")
+    return hora?.slice(0, 5) ?? hora;
+  }
+
   private calcularCota(
     horaInicio: string,
     horaFim: string,
     sistema: string,
   ): number {
-    if (sistema === 'PJES' && horaInicio === horaFim) return 2;
+    if (
+      sistema === 'PJES' &&
+      this.normalizarHora(horaInicio) === this.normalizarHora(horaFim)
+    ) {
+      return 2;
+    }
     return 1;
   }
 
