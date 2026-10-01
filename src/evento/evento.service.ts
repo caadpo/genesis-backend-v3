@@ -718,6 +718,8 @@ export class EventoService {
     distribuicaoId?: number,
     omeId?: number,
     user?: UserEntity,
+    mes?: number,
+    ano?: number,
   ): Promise<ReturnEventoComTotalCotasDto[]> {
     const qb = this.eventoRepo
       .createQueryBuilder('e')
@@ -732,6 +734,22 @@ export class EventoService {
 
     if (distribuicaoId) qb.where('d.id = :id', { id: distribuicaoId });
     if (omeId) qb.andWhere('e.ome_id = :omeId', { omeId });
+
+    // ✅ Só entram eventos com alguma escala (de alguma das suas operações)
+    // com data_inicio no mês/ano informados — usado pela modal de filtro.
+    if (mes && ano) {
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM operacao op2
+          INNER JOIN escala esc ON esc.operacao_id = op2.id
+          WHERE op2.evento_id = e.id
+            AND EXTRACT(MONTH FROM esc.data_inicio) = :mes
+            AND EXTRACT(YEAR FROM esc.data_inicio) = :ano
+        )`,
+        { mes, ano },
+      );
+    }
 
     if (user) {
       const typeUser = Number(user.typeUser);

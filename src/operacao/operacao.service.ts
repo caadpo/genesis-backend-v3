@@ -238,14 +238,33 @@ export class OperacaoService {
     });
   }
 
-  async findAll(eventoId?: number): Promise<ReturnOperacaoComTotalCotasDto[]> {
+  async findAll(
+    eventoId?: number,
+    mes?: number,
+    ano?: number,
+  ): Promise<ReturnOperacaoComTotalCotasDto[]> {
     const qb = this.operacaoRepo
       .createQueryBuilder('o')
       .leftJoinAndSelect('o.evento', 'e')
       .leftJoinAndSelect('o.ome', 'ome');
 
     if (eventoId) {
-      qb.where('e.id = :id', { id: eventoId });
+      qb.andWhere('e.id = :id', { id: eventoId });
+    }
+
+    // ✅ Só entram operações com alguma escala com data_inicio no mês/ano
+    // informados — usado pela modal de filtro.
+    if (mes && ano) {
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM escala esc
+          WHERE esc.operacao_id = o.id
+            AND EXTRACT(MONTH FROM esc.data_inicio) = :mes
+            AND EXTRACT(YEAR FROM esc.data_inicio) = :ano
+        )`,
+        { mes, ano },
+      );
     }
 
     const operacoes = await qb.getMany();

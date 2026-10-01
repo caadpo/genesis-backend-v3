@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { Cron, CronExpression } from '@nestjs/schedule'; // ⬅️ requer @nestjs/schedule + ScheduleModule.forRoot() no AppModule
 
 import { EscalaEntity } from './entities/escala.entity';
 import { CreateEscalaDto } from './dtos/create-escala.dto';
@@ -18,12 +19,20 @@ import { ViaturaEntity } from 'src/viatura/entities/viatura.entity';
 import { DadosSgpEntity } from 'src/dadossgp/entities/dadossgp.entity';
 import { ReturnEscalaOperacaoDto } from './dtos/return-escala-operacao.dto';
 
+import { DataSource, In } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { BulkEscalaRowDto } from './dtos/bulk-escala-row.dto';
+import { lerPlanilhaEscalas } from './utils/planilha-escala.util';
+
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { tmpdir } from 'os';
 import { PagamentoEntity } from 'src/pagamento/entities/pagamento.entity';
+import { ConfirmarPresencaDto } from './dtos/confirmar-presenca.dto';
 
 const execFileAsync = promisify(execFile);
 
@@ -35,6 +44,9 @@ export interface CotasPorTipo {
 @Injectable()
 export class EscalaService {
   constructor(
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
+
     @InjectRepository(EscalaEntity)
     private readonly repo: Repository<EscalaEntity>,
 
@@ -55,6 +67,7 @@ export class EscalaService {
   ) {}
 
   private readonly FUNCOES_COM_VIATURA = ['CMT', 'MOT', 'FISCAL', 'PAT'];
+  private readonly MINUTOS_ANTECEDENCIA_PRESENCA = 15;
 
   private valorMultiplicador(sistema: string, tipo_escala: string): number {
     if (sistema === 'PJES') {
@@ -123,7 +136,7 @@ export class EscalaService {
   private async verificarViatura(
     viaturaId: number | null | undefined,
     funcao: string,
-    operacaoId: number, // ← era omeId, agora é operacaoId
+    operacaoId: number,
   ): Promise<void> {
     if (!viaturaId) return;
 
@@ -149,8 +162,6 @@ export class EscalaService {
     }
   }
 
-  // Busca o usuário (com conta e ome) e o registro correspondente em dadosSgp.
-  // Lança BadRequest se não houver SGP — não faz sentido escalar sem vínculo.
   private async buscarUsuario(usuarioId: number): Promise<{
     usuario: UserEntity;
     sgp: DadosSgpEntity;
@@ -201,8 +212,6 @@ export class EscalaService {
   }
 
   private normalizarHora(hora: string): string {
-    // Garante comparação por HH:mm, ignorando segundos que o Postgres
-    // costuma anexar quando o valor vem da entidade (ex: "07:00:00")
     return hora?.slice(0, 5) ?? hora;
   }
 
@@ -218,6 +227,37 @@ export class EscalaService {
       return 2;
     }
     return 1;
+  }
+
+  // ── Janela de tempo da escala (presença / saída) ─────────────────────────────
+
+  private combinarDataHora(data: string, hora: string): Date {
+    const [ano, mes, dia] = data.split('-').map(Number);
+    const [h, m] = this.normalizarHora(hora).split(':').map(Number);
+    return new Date(ano, mes - 1, dia, h, m, 0, 0);
+  }
+
+  /**
+   * Calcula início, fim e abertura da janela de presença de uma escala.
+   * Trata escalas noturnas (horaFim <= horaInicio → término é no dia seguinte).
+   */
+  private calcularJanelaEscala(
+    dataInicio: string,
+    horaInicio: string,
+    horaFim: string,
+  ): { inicio: Date; fim: Date; aberturaPresenca: Date } {
+    const inicio = this.combinarDataHora(dataInicio, horaInicio);
+    let fim = this.combinarDataHora(dataInicio, horaFim);
+
+    if (fim <= inicio) {
+      fim = new Date(fim.getTime() + 24 * 60 * 60 * 1000);
+    }
+
+    const aberturaPresenca = new Date(
+      inicio.getTime() - this.MINUTOS_ANTECEDENCIA_PRESENCA * 60 * 1000,
+    );
+
+    return { inicio, fim, aberturaPresenca };
   }
 
   private async verificarConflito(
@@ -323,7 +363,6 @@ export class EscalaService {
     let somaAtual = 0;
 
     if (sistema === 'PJES') {
-      // Limite mensal: soma todas as cotas do usuário no mesmo mês/ano
       const qb = this.repo
         .createQueryBuilder('e')
         .select('COALESCE(SUM(e.cota_escala), 0)', 'soma')
@@ -363,7 +402,6 @@ export class EscalaService {
     }
 
     if (sistema === 'DIARIAS') {
-      // Limite por operação: soma todas as cotas do usuário na mesma operação
       const qb = this.repo
         .createQueryBuilder('e')
         .select('COALESCE(SUM(e.cota_escala), 0)', 'soma')
@@ -384,6 +422,28 @@ export class EscalaService {
     }
   }
 
+  /** Confirma se o usuário está escalado como FISCAL na mesma operação/data. */
+  private async validarFiscal(
+    usuarioId: number,
+    operacaoId: number,
+    dataInicio: string,
+  ): Promise<void> {
+    const ehFiscal = await this.repo.exists({
+      where: {
+        usuario: { id: usuarioId },
+        operacao: { id: operacaoId },
+        dataInicio,
+        funcao: 'FISCAL',
+      },
+    });
+
+    if (!ehFiscal) {
+      throw new ForbiddenException(
+        'Somente usuários escalados como FISCAL nesta operação/data podem realizar a verificação',
+      );
+    }
+  }
+
   // ── Find minhas escalas ─────────────────────────────────────────────────────
 
   async findMinhasEscalas(usuarioLogado: {
@@ -401,13 +461,14 @@ export class EscalaService {
       .leftJoinAndSelect('e.conta', 'conta')
       .leftJoinAndSelect('e.usuario', 'usuario')
       .leftJoinAndSelect('e.presencaConfirmadaPor', 'confirmador')
+      .leftJoinAndSelect('e.saidaConfirmadaPor', 'saidaPor')
+      .leftJoinAndSelect('e.verificador1', 'verificador1')
+      .leftJoinAndSelect('e.verificador2', 'verificador2')
       .where('e.usuario_id = :usuarioId', { usuarioId: usuarioLogado.id })
       .orderBy('e.data_inicio', 'ASC')
       .addOrderBy('e.hora_inicio', 'ASC')
       .getMany();
 
-    // Agrupamento por teto — usado para exibir o total de cotas do teto
-    // (somacota_escala), que é um número "informativo" e não financeiro.
     const agrupadoPorTeto = new Map<number | null, EscalaEntity[]>();
     for (const escala of escalas) {
       const idTeto = escala?.operacao?.evento?.distribuicao?.teto?.id ?? null;
@@ -442,25 +503,8 @@ export class EscalaService {
       }
     }
 
-    const matsConfirmadores = escalas
-      .map((e) => e.presencaConfirmadaPor?.mat)
-      .filter(Boolean) as string[];
+    const sgpMap = await this.construirMapaNomes(escalas);
 
-    const sgpMap = new Map<string, string>();
-    if (matsConfirmadores.length) {
-      const sgps = await this.dadosSgpRepo
-        .createQueryBuilder('sgp')
-        .where('sgp.matSgp IN (:...mats)', { mats: matsConfirmadores })
-        .getMany();
-      sgps.forEach((sgp) => {
-        sgpMap.set(
-          sgp.matSgp,
-          `${sgp.pgSgp} ${sgp.matSgp} ${sgp.nomeGuerraSgp}`,
-        );
-      });
-    }
-
-    // ✅ Fora do map — executa UMA vez só
     const pagamentosUsuario = await this.pagamentoRepo.find({
       where: { usuarioId: usuarioLogado.id },
     });
@@ -470,19 +514,15 @@ export class EscalaService {
       comentarioPorEvento.set(pg.eventoId, pg.comentario_pagamento ?? null);
     }
 
-    // ✅ Map simples, sem aninhamento, sem await
     return escalas.map((e) => {
       const idTeto = e?.operacao?.evento?.distribuicao?.teto?.id ?? null;
       const somacota_escala = somasPorTeto.get(idTeto) || 0;
       const eventoId = e?.operacao?.evento?.id ?? null;
 
-      // Valor individual desta escala, respeitando seu próprio tipo_escala.
       const valorIndividual =
         (e.cota_escala || 0) *
         this.valorMultiplicador(e.sistema, e.tipo_escala);
 
-      // Valor financeiro correto: soma de todas as escalas do mesmo
-      // teto + sistema, cada uma já calculada com seu próprio multiplicador.
       const somaCotaFinal =
         valorFinalPorTetoSistema.get(`${idTeto}|${e.sistema}`) ?? 0;
 
@@ -499,12 +539,8 @@ export class EscalaService {
           : null;
       }
 
-      const nomeConfirmador = e.presencaConfirmadaPor?.mat
-        ? (sgpMap.get(e.presencaConfirmadaPor.mat) ?? null)
-        : null;
-
       return {
-        ...new ReturnEscalaDto(e, nomeConfirmador),
+        ...new ReturnEscalaDto(e, this.resolverNomes(e, sgpMap)),
         somacota_escala,
         somaCotaFinal,
         valorIndividual,
@@ -532,26 +568,22 @@ export class EscalaService {
       );
     }
 
-    // Se for AUXILIAR, aplica restrições adicionais
     if (isAuxiliar) {
       const alvo = await this.userRepo.findOne({ where: { id: usuarioId } });
       if (!alvo) throw new NotFoundException('Usuário não encontrado');
 
-      // Não pode ver escala de usuários fora da própria OME
       if (Number(alvo.omeId) !== Number(usuarioLogado.omeId)) {
         throw new ForbiddenException(
           'Auxiliar só pode visualizar a escala de usuários da sua OME',
         );
       }
 
-      // Não pode ver escala de usuários da OME DPO SEDE (id = 1)
       if (Number(alvo.omeId) === 1) {
         throw new ForbiddenException(
           'Auxiliar não pode visualizar a escala de usuários da OME DPO SEDE',
         );
       }
 
-      // Não pode ver TECNICO, MASTER ou DIRETOR, mesmo dentro da própria OME
       const tiposProibidos = [
         UserType.MASTER,
         UserType.TECNICO,
@@ -572,37 +604,18 @@ export class EscalaService {
       .leftJoinAndSelect('evento.ome', 'ome')
       .leftJoinAndSelect('e.conta', 'conta')
       .leftJoinAndSelect('e.presencaConfirmadaPor', 'confirmador')
+      .leftJoinAndSelect('e.saidaConfirmadaPor', 'saidaPor')
       .where('e.usuario_id = :usuarioId', { usuarioId })
       .andWhere('e.sistema = :sistema', { sistema })
       .orderBy('e.data_inicio', 'ASC')
       .addOrderBy('e.hora_inicio', 'ASC')
       .getMany();
 
-    const matsConfirmadores = escalas
-      .map((e) => e.presencaConfirmadaPor?.mat)
-      .filter(Boolean) as string[];
+    const sgpMap = await this.construirMapaNomes(escalas);
 
-    const sgpMap = new Map<string, string>();
-    if (matsConfirmadores.length) {
-      const sgps = await this.dadosSgpRepo
-        .createQueryBuilder('sgp')
-        .where('sgp.matSgp IN (:...mats)', { mats: matsConfirmadores })
-        .getMany();
-
-      sgps.forEach((sgp) => {
-        sgpMap.set(
-          sgp.matSgp,
-          `${sgp.pgSgp} ${sgp.matSgp} ${sgp.nomeGuerraSgp}`,
-        );
-      });
-    }
-
-    return escalas.map((e) => {
-      const nomeConfirmador = e.presencaConfirmadaPor?.mat
-        ? (sgpMap.get(e.presencaConfirmadaPor.mat) ?? null)
-        : null;
-      return new ReturnEscalaDto(e, nomeConfirmador);
-    });
+    return escalas.map(
+      (e) => new ReturnEscalaDto(e, this.resolverNomes(e, sgpMap)),
+    );
   }
 
   // ── Create ──────────────────────────────────────────────────────────────────
@@ -636,7 +649,6 @@ export class EscalaService {
       operacao: { id: dto.operacaoId },
       usuario: { id: dto.usuarioId },
 
-      // Snapshot do SGP — buscado automaticamente pelo backend
       pg_escala: sgp.pgSgp,
       mat_escala: sgp.matSgp,
       ng_escala: sgp.nomeGuerraSgp,
@@ -750,6 +762,28 @@ export class EscalaService {
       ...(dto.situacao && { situacao: dto.situacao }),
       ...(dto.anotacoes !== undefined && { anotacoes: dto.anotacoes }),
       ...(dto.viaturaId !== undefined && { viaturaId: dto.viaturaId ?? null }),
+
+      // Qualquer edição na escala invalida o que já foi registrado nela.
+      presencaConfirmada: false,
+      presencaConfirmadaEm: null,
+      presencaConfirmadaPorId: null,
+      presencaLatitude: null,
+      presencaLongitude: null,
+
+      saidaConfirmada: false,
+      saidaConfirmadaEm: null,
+      saidaConfirmadaPorId: null,
+      saidaAutomatica: false,
+
+      primeiraVerificacao: false,
+      idVerificador1: null,
+      dataHoraVerificador1: null,
+      obsVerificador1: null,
+
+      segundaVerificacao: false,
+      idVerificador2: null,
+      dataHoraVerificador2: null,
+      obsVerificador2: null,
     });
 
     try {
@@ -778,6 +812,9 @@ export class EscalaService {
       .leftJoinAndSelect('e.operacao', 'operacao')
       .leftJoinAndSelect('operacao.evento', 'evento')
       .leftJoinAndSelect('e.presencaConfirmadaPor', 'confirmador')
+      .leftJoinAndSelect('e.saidaConfirmadaPor', 'saidaPor')
+      .leftJoinAndSelect('e.verificador1', 'verificador1')
+      .leftJoinAndSelect('e.verificador2', 'verificador2')
       .where('e.operacao_id = :operacaoId', { operacaoId })
       .orderBy('e.data_inicio', 'DESC')
       .addOrderBy('e.hora_inicio', 'ASC')
@@ -796,39 +833,24 @@ export class EscalaService {
       )
       .getMany();
 
-    // Busca todos os SGPs dos confirmadores de uma vez
-    const matsConfirmadores = escalas
-      .map((e) => e.presencaConfirmadaPor?.mat)
-      .filter(Boolean) as string[];
+    const sgpMap = await this.construirMapaNomes(escalas);
 
-    const sgpMap = new Map<string, string>();
-
-    if (matsConfirmadores.length) {
-      const sgps = await this.dadosSgpRepo
-        .createQueryBuilder('sgp')
-        .where('sgp.matSgp IN (:...mats)', { mats: matsConfirmadores })
-        .getMany();
-
-      sgps.forEach((sgp) => {
-        sgpMap.set(
-          sgp.matSgp,
-          `${sgp.pgSgp} ${sgp.matSgp} ${sgp.nomeGuerraSgp}`,
-        );
-      });
-    }
-
-    const dtos = escalas.map((e) => {
-      const nomeConfirmador = e.presencaConfirmadaPor?.mat
-        ? (sgpMap.get(e.presencaConfirmadaPor.mat) ?? null)
-        : null;
-
-      return new ReturnEscalaDto(e, nomeConfirmador);
-    });
+    const dtos = escalas.map(
+      (e) => new ReturnEscalaDto(e, this.resolverNomes(e, sgpMap)),
+    );
 
     return new ReturnEscalaOperacaoDto(dtos);
   }
 
-  async findByCodOp(codOp: string): Promise<ReturnEscalaDto[]> {
+  async findByCodOp(
+    codOp: string,
+    usuarioLogado?: { id: number },
+  ): Promise<
+    (ReturnEscalaDto & {
+      minhaVerificacao: 1 | 2 | null;
+      podeVerificar: boolean;
+    })[]
+  > {
     const escalas = await this.repo
       .createQueryBuilder('e')
       .leftJoinAndSelect('e.viatura', 'viatura')
@@ -838,7 +860,9 @@ export class EscalaService {
       .leftJoinAndSelect('operacao.evento', 'evento')
       .leftJoinAndSelect('evento.ome', 'ome')
       .leftJoinAndSelect('e.presencaConfirmadaPor', 'confirmador')
-      .leftJoinAndSelect('e.observacaoEscritaPor', 'obsAutor')
+      .leftJoinAndSelect('e.saidaConfirmadaPor', 'saidaPor')
+      .leftJoinAndSelect('e.verificador1', 'verificador1')
+      .leftJoinAndSelect('e.verificador2', 'verificador2')
       .where('operacao.cod_op = :codOp', { codOp })
       .orderBy('e.data_inicio', 'ASC')
       .addOrderBy('e.hora_inicio', 'ASC')
@@ -859,37 +883,31 @@ export class EscalaService {
       throw new NotFoundException('Nenhuma escala encontrada para este COP');
     }
 
-    // Coleta todas as matrículas únicas (confirmador + autor da obs) em uma só query
-    const mats = [
-      ...escalas.map((e) => e.presencaConfirmadaPor?.mat),
-      ...escalas.map((e) => e.observacaoEscritaPor?.mat),
-    ].filter(Boolean) as string[];
+    const sgpMap = await this.construirMapaNomes(escalas);
 
-    const sgpMap = new Map<string, string>();
-
-    if (mats.length) {
-      const sgps = await this.dadosSgpRepo
-        .createQueryBuilder('sgp')
-        .where('sgp.matSgp IN (:...mats)', { mats })
-        .getMany();
-
-      sgps.forEach((sgp) => {
-        sgpMap.set(
-          sgp.matSgp,
-          `${sgp.pgSgp} ${sgp.matSgp} ${sgp.nomeGuerraSgp}`,
-        );
-      });
+    // Operação|data em que o usuário logado está escalado como FISCAL
+    // (mesma regra do validarFiscal, resolvida em memória)
+    const chavesFiscal = new Set<string>();
+    if (usuarioLogado) {
+      for (const e of escalas) {
+        if (e.usuario?.id === usuarioLogado.id && e.funcao === 'FISCAL') {
+          chavesFiscal.add(`${e.operacao?.id}|${e.dataInicio}`);
+        }
+      }
     }
 
-    return escalas.map((e) => {
-      const nomeConfirmador = e.presencaConfirmadaPor?.mat
-        ? (sgpMap.get(e.presencaConfirmadaPor.mat) ?? null)
-        : null;
-      const nomeObsAutor = e.observacaoEscritaPor?.mat
-        ? (sgpMap.get(e.observacaoEscritaPor.mat) ?? null)
-        : null;
-      return new ReturnEscalaDto(e, nomeConfirmador, nomeObsAutor);
-    });
+    const minhaVerificacao = (e: EscalaEntity): 1 | 2 | null => {
+      if (!usuarioLogado) return null;
+      if (e.idVerificador1 === usuarioLogado.id) return 1;
+      if (e.idVerificador2 === usuarioLogado.id) return 2;
+      return null;
+    };
+
+    return escalas.map((e) => ({
+      ...new ReturnEscalaDto(e, this.resolverNomes(e, sgpMap)),
+      minhaVerificacao: minhaVerificacao(e),
+      podeVerificar: chavesFiscal.has(`${e.operacao?.id}|${e.dataInicio}`),
+    }));
   }
 
   async generatePdf(
@@ -914,8 +932,6 @@ export class EscalaService {
     const cod_op = operacao?.cod_op ?? `op${operacaoId}`;
     const outputPath = path.join(tmpdir(), `COP_${cod_op}.pdf`);
 
-    // Payload vai para arquivo temporário — passá-lo como argumento de CLI
-    // estoura o ARG_MAX do SO quando há muitas escalas, causando "spawn E2BIG".
     const inputPath = path.join(
       tmpdir(),
       `COP_${cod_op}_input_${Date.now()}.json`,
@@ -939,103 +955,180 @@ export class EscalaService {
     }
   }
 
-  // ── método de confirmação checagem da escala ────────────────────────────────────────────────────────
+  // ── Confirmação de presença (só o próprio escalado, dentro da janela) ───────
 
   async confirmarPresenca(
     escalaId: number,
-    confirmado: boolean,
-    observacao: string | undefined,
-    usuarioLogado: { id: number; omeId: number },
+    dto: ConfirmarPresencaDto,
+    usuarioLogado: { id: number },
   ): Promise<ReturnEscalaDto> {
     const escala = await this.repo.findOne({
       where: { id: escalaId },
-      relations: { operacao: { evento: { ome: true } } },
+      relations: { usuario: true },
     });
 
     if (!escala) throw new NotFoundException('Escala não encontrada');
 
-    // ✅ Só pode confirmar presença NO DIA exato da escala — nem antes, nem depois
-    const hoje = new Date();
-    const hojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+    if (escala.usuario.id !== usuarioLogado.id) {
+      throw new ForbiddenException('Você só pode confirmar a própria presença');
+    }
 
-    if (escala.dataInicio !== hojeStr) {
+    if (escala.presencaConfirmada) {
+      throw new BadRequestException('Presença já confirmada para esta escala');
+    }
+
+    const { aberturaPresenca, fim } = this.calcularJanelaEscala(
+      escala.dataInicio,
+      escala.horaInicio,
+      escala.horaFim,
+    );
+
+    const agora = new Date();
+
+    if (agora < aberturaPresenca) {
       throw new ForbiddenException(
-        'A confirmação de presença só pode ser feita no dia da escala',
+        `A confirmação de presença só é liberada a partir de ${aberturaPresenca.toLocaleString('pt-BR')} ` +
+          `(${this.MINUTOS_ANTECEDENCIA_PRESENCA} minutos antes do início da escala)`,
       );
     }
 
-    const omeDoEvento = escala.operacao?.evento?.ome?.id;
-    const mesmaOme = omeDoEvento === usuarioLogado.omeId;
-
-    let ehFiscalNaData = false;
-    if (!mesmaOme) {
-      ehFiscalNaData = await this.repo.exists({
-        where: {
-          usuario: { id: usuarioLogado.id },
-          dataInicio: escala.dataInicio,
-          funcao: 'FISCAL',
-        },
-      });
-    }
-
-    if (!mesmaOme && !ehFiscalNaData) {
+    if (agora > fim) {
       throw new ForbiddenException(
-        'Você só pode confirmar presença de escalas da sua OME, ou se estiver escalado como FISCAL nesta mesma data',
+        'O horário de término da escala já passou. Não é mais possível confirmar presença.',
       );
     }
 
-    escala.presencaConfirmada = confirmado;
+    escala.presencaConfirmada = true;
+    escala.presencaConfirmadaEm = agora;
+    escala.presencaConfirmadaPorId = usuarioLogado.id;
+    escala.presencaLatitude = dto.latitude;
+    escala.presencaLongitude = dto.longitude;
 
-    // Observação: sempre salva quando enviada; registra quem escreveu
-    if (observacao !== undefined) {
-      escala.presencaObservacao = observacao;
-      if (observacao.trim()) {
-        escala.observacaoEscritaPor = { id: usuarioLogado.id } as UserEntity;
-        escala.observacaoEscritaEm = new Date();
-      } else {
-        // Usuário apagou a observação → limpa o autor também
-        escala.observacaoEscritaPor = null;
-        escala.observacaoEscritaEm = null;
+    await this.repo.save(escala);
+    return this.findOne(escalaId);
+  }
+
+  // ── Confirmação de saída (liberada após presença confirmada) ─────────────────
+
+  async confirmarSaida(
+    escalaId: number,
+    usuarioLogado: { id: number },
+  ): Promise<ReturnEscalaDto> {
+    const escala = await this.repo.findOne({
+      where: { id: escalaId },
+      relations: { usuario: true },
+    });
+
+    if (!escala) throw new NotFoundException('Escala não encontrada');
+
+    if (escala.usuario.id !== usuarioLogado.id) {
+      throw new ForbiddenException('Você só pode confirmar a própria saída');
+    }
+
+    if (!escala.presencaConfirmada) {
+      throw new BadRequestException(
+        'Não é possível registrar saída sem presença confirmada',
+      );
+    }
+
+    if (escala.saidaConfirmada) {
+      throw new BadRequestException('Saída já registrada para esta escala');
+    }
+
+    escala.saidaConfirmada = true;
+    escala.saidaConfirmadaEm = new Date();
+    escala.saidaConfirmadaPorId = usuarioLogado.id;
+
+    await this.repo.save(escala);
+    return this.findOne(escalaId);
+  }
+
+  /**
+   * Fecha automaticamente a saída de quem teve presença confirmada mas não
+   * deu saída até o fim do próprio turno. saidaConfirmadaPorId fica null
+   * para indicar fechamento pelo sistema (não pela pessoa).
+   * Requer @nestjs/schedule com ScheduleModule.forRoot() no AppModule.
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async encerrarSaidasAutomaticamente(): Promise<void> {
+    const pendentes = await this.repo.find({
+      where: { presencaConfirmada: true, saidaConfirmada: false },
+    });
+
+    const agora = new Date();
+
+    for (const escala of pendentes) {
+      const { fim } = this.calcularJanelaEscala(
+        escala.dataInicio,
+        escala.horaInicio,
+        escala.horaFim,
+      );
+
+      if (agora >= fim) {
+        escala.saidaConfirmada = true;
+        escala.saidaConfirmadaEm = fim;
+        escala.saidaConfirmadaPorId = null;
+        await this.repo.save(escala);
       }
     }
-    // Se observacao === undefined (não enviada), não toca no campo
+  }
 
-    if (confirmado) {
-      escala.presencaConfirmadaEm = new Date();
-      escala.presencaConfirmadaPor = { id: usuarioLogado.id } as UserEntity;
-    } else {
-      escala.presencaConfirmadaEm = null;
-      escala.presencaConfirmadaPor = null;
-    }
+  // ── Verificação por fiscais (1ª e 2ª ronda) ──────────────────────────────────
 
-    // A observação é sempre salva, independente do status de confirmação.
-    // Só limpamos os campos de "quem confirmou" quando desmarca a presença.
-    escala.presencaObservacao = observacao ?? escala.presencaObservacao ?? null;
+  async registrarVerificacao(
+    escalaId: number,
+    numero: 1 | 2,
+    dados: { verificado?: boolean; observacao?: string },
+    usuarioLogado: { id: number },
+  ): Promise<ReturnEscalaDto> {
+    const escala = await this.repo.findOne({
+      where: { id: escalaId },
+      relations: { operacao: true },
+    });
 
-    if (confirmado) {
-      escala.presencaConfirmadaEm = new Date();
-      escala.presencaConfirmadaPor = { id: usuarioLogado.id } as UserEntity;
-    } else {
-      escala.presencaConfirmadaEm = null;
-      escala.presencaConfirmadaPor = null;
-    }
+    if (!escala) throw new NotFoundException('Escala não encontrada');
 
-    if (escala.dataInicio !== hojeStr) {
-      throw new ForbiddenException(
-        'A confirmação de presença só pode ser feita no dia da escala',
+    if (dados.verificado === undefined && dados.observacao === undefined) {
+      throw new BadRequestException(
+        'Informe ao menos "verificado" ou "observacao"',
       );
     }
 
-    // ✅ Bloqueia se o horário de término já passou
+    await this.validarFiscal(
+      usuarioLogado.id,
+      escala.operacao.id,
+      escala.dataInicio,
+    );
+
+    const idAtual =
+      numero === 1 ? escala.idVerificador1 : escala.idVerificador2;
+
+    if (idAtual != null && idAtual !== usuarioLogado.id) {
+      throw new ForbiddenException(
+        `A ${numero}ª verificação já foi registrada por outro fiscal`,
+      );
+    }
+
     const agora = new Date();
-    const [hFim, mFim] = escala.horaFim.split(':').map(Number);
-    const fimEscala = new Date();
-    fimEscala.setHours(hFim, mFim, 0, 0);
 
-    if (agora > fimEscala) {
-      throw new ForbiddenException(
-        'O horário de término da escala já passou. Não é mais possível registrar presença ou observação.',
-      );
+    if (numero === 1) {
+      if (dados.verificado !== undefined) {
+        escala.primeiraVerificacao = dados.verificado;
+      }
+      if (dados.observacao !== undefined) {
+        escala.obsVerificador1 = dados.observacao;
+      }
+      escala.idVerificador1 = usuarioLogado.id;
+      escala.dataHoraVerificador1 = agora;
+    } else {
+      if (dados.verificado !== undefined) {
+        escala.segundaVerificacao = dados.verificado;
+      }
+      if (dados.observacao !== undefined) {
+        escala.obsVerificador2 = dados.observacao;
+      }
+      escala.idVerificador2 = usuarioLogado.id;
+      escala.dataHoraVerificador2 = agora;
     }
 
     await this.repo.save(escala);
@@ -1051,26 +1144,75 @@ export class EscalaService {
       .leftJoinAndSelect('e.usuario', 'usuario')
       .leftJoinAndSelect('e.conta', 'conta')
       .leftJoinAndSelect('e.presencaConfirmadaPor', 'confirmador')
-      .leftJoinAndSelect('e.observacaoEscritaPor', 'obsAutor')
+      .leftJoinAndSelect('e.saidaConfirmadaPor', 'saidaPor')
+      .leftJoinAndSelect('e.verificador1', 'verificador1')
+      .leftJoinAndSelect('e.verificador2', 'verificador2')
       .where('e.id = :id', { id })
       .getOne();
 
     if (!escala) throw new NotFoundException('Escala não encontrada');
 
-    const [nomeConfirmador, nomeObsAutor] = await Promise.all([
-      this.buscarNomeConfirmador(escala.presencaConfirmadaPor?.mat),
-      this.buscarNomeConfirmador(escala.observacaoEscritaPor?.mat),
-    ]);
+    const sgpMap = await this.construirMapaNomes([escala]);
 
-    return new ReturnEscalaDto(escala, nomeConfirmador, nomeObsAutor);
+    return new ReturnEscalaDto(escala, this.resolverNomes(escala, sgpMap));
   }
 
-  private async buscarNomeConfirmador(mat?: string): Promise<string | null> {
-    if (!mat) return null;
-    const sgp = await this.dadosSgpRepo.findOne({ where: { matSgp: mat } });
-    console.log('SGP encontrado para mat', mat, ':', sgp); // 👈 debug
-    if (!sgp) return null;
-    return `${sgp.pgSgp} ${mat} ${sgp.nomeGuerraSgp}`;
+  /**
+   * Monta, em uma única consulta, um mapa mat → "PG MAT NOME_GUERRA" para
+   * todos os confirmadores/saídas/verificadores presentes na lista de escalas.
+   * Evita N+1 quando exibimos quem confirmou presença, quem deu saída e
+   * quem fez a 1ª/2ª verificação.
+   */
+  private async construirMapaNomes(
+    escalas: EscalaEntity[],
+  ): Promise<Map<string, string>> {
+    const mats = new Set<string>();
+    for (const e of escalas) {
+      if (e.presencaConfirmadaPor?.mat) mats.add(e.presencaConfirmadaPor.mat);
+      if (e.saidaConfirmadaPor?.mat) mats.add(e.saidaConfirmadaPor.mat);
+      if (e.verificador1?.mat) mats.add(e.verificador1.mat);
+      if (e.verificador2?.mat) mats.add(e.verificador2.mat);
+    }
+
+    const mapa = new Map<string, string>();
+    if (!mats.size) return mapa;
+
+    const sgps = await this.dadosSgpRepo
+      .createQueryBuilder('sgp')
+      .where('sgp.matSgp IN (:...mats)', { mats: [...mats] })
+      .getMany();
+
+    sgps.forEach((sgp) => {
+      mapa.set(sgp.matSgp, `${sgp.pgSgp} ${sgp.matSgp} ${sgp.nomeGuerraSgp}`);
+    });
+
+    return mapa;
+  }
+
+  /** Resolve, a partir do mapa acima, os nomes prontos para o ReturnEscalaDto. */
+  private resolverNomes(
+    e: EscalaEntity,
+    sgpMap: Map<string, string>,
+  ): {
+    confirmador?: string | null;
+    saidaPor?: string | null;
+    verificador1?: string | null;
+    verificador2?: string | null;
+  } {
+    return {
+      confirmador: e.presencaConfirmadaPor?.mat
+        ? (sgpMap.get(e.presencaConfirmadaPor.mat) ?? null)
+        : null,
+      saidaPor: e.saidaConfirmadaPor?.mat
+        ? (sgpMap.get(e.saidaConfirmadaPor.mat) ?? null)
+        : null,
+      verificador1: e.verificador1?.mat
+        ? (sgpMap.get(e.verificador1.mat) ?? null)
+        : null,
+      verificador2: e.verificador2?.mat
+        ? (sgpMap.get(e.verificador2.mat) ?? null)
+        : null,
+    };
   }
 
   // ── Find by matrícula — PJES ─────────────────────────────────────────────────
@@ -1133,5 +1275,358 @@ export class EscalaService {
     ]);
 
     await this.repo.delete(id);
+  }
+
+  // ── Upload em massa (somente MASTER) ─────────────────────────────────────────
+
+  private paraDataString(valor: any): string {
+    if (valor instanceof Date) {
+      const y = valor.getUTCFullYear();
+      const m = String(valor.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(valor.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    return String(valor).slice(0, 10);
+  }
+
+  private readonly LIMITE_MAX_LINHAS_UPLOAD = 20000;
+
+  async bulkUpload(
+    buffer: Buffer,
+    usuarioLogado: { id: number; typeUser: number; omeId: number },
+  ): Promise<{ inseridos: number; mensagem: string }> {
+    if (Number(usuarioLogado.typeUser) !== UserType.MASTER) {
+      throw new ForbiddenException(
+        'Somente usuários MASTER podem importar planilhas de escala',
+      );
+    }
+
+    let linhasBrutas;
+    try {
+      linhasBrutas = await lerPlanilhaEscalas(buffer);
+    } catch (err: any) {
+      throw new BadRequestException(
+        err?.message || 'Não foi possível ler a planilha enviada',
+      );
+    }
+
+    if (linhasBrutas.length === 0) {
+      throw new BadRequestException(
+        'A planilha não possui registros para importar',
+      );
+    }
+    if (linhasBrutas.length > this.LIMITE_MAX_LINHAS_UPLOAD) {
+      throw new BadRequestException(
+        `A planilha possui ${linhasBrutas.length} linhas. O limite por importação é ${this.LIMITE_MAX_LINHAS_UPLOAD}`,
+      );
+    }
+
+    const erros: { linha: number; mensagens: string[] }[] = [];
+    const linhasValidas: { linha: number; dto: BulkEscalaRowDto }[] = [];
+
+    for (const { linha, dados } of linhasBrutas) {
+      const dto = plainToInstance(BulkEscalaRowDto, dados);
+      const erroValidacao = await validate(dto, { whitelist: true });
+
+      if (erroValidacao.length > 0) {
+        const mensagens = erroValidacao.flatMap((e) =>
+          Object.values(e.constraints ?? {}),
+        );
+        erros.push({ linha, mensagens });
+        continue;
+      }
+      linhasValidas.push({ linha, dto });
+    }
+
+    if (erros.length > 0) {
+      throw new BadRequestException({
+        message:
+          'A planilha contém erros de preenchimento. Nenhum registro foi importado.',
+        totalLinhas: linhasBrutas.length,
+        totalErros: erros.length,
+        erros,
+      });
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const operacaoIds = [
+        ...new Set(linhasValidas.map((l) => l.dto.operacaoId)),
+      ];
+      const usuarioIds = [
+        ...new Set(linhasValidas.map((l) => l.dto.usuarioId)),
+      ];
+      const viaturaIds = [
+        ...new Set(
+          linhasValidas
+            .map((l) => l.dto.viaturaId)
+            .filter((v): v is number => v !== undefined && v !== null),
+        ),
+      ];
+
+      const [operacoes, usuarios, viaturas] = await Promise.all([
+        queryRunner.manager.find(Operacao, {
+          where: { id: In(operacaoIds) },
+          relations: { evento: { ome: true } },
+        }),
+        queryRunner.manager.find(UserEntity, {
+          where: { id: In(usuarioIds) },
+          relations: { conta: true, ome: true },
+        }),
+        viaturaIds.length
+          ? queryRunner.manager.find(ViaturaEntity, {
+              where: { id: In(viaturaIds) },
+            })
+          : Promise.resolve([] as ViaturaEntity[]),
+      ]);
+
+      const operacaoMap = new Map(operacoes.map((o) => [o.id, o]));
+      const usuarioMap = new Map(usuarios.map((u) => [u.id, u]));
+      const viaturaMap = new Map(viaturas.map((v) => [v.id, v]));
+
+      const matsReferenciados = [
+        ...new Set(usuarios.map((u) => u.mat).filter(Boolean)),
+      ];
+
+      const sgps = matsReferenciados.length
+        ? await queryRunner.manager.find(DadosSgpEntity, {
+            where: { matSgp: In(matsReferenciados) },
+          })
+        : [];
+      const sgpMap = new Map(sgps.map((s) => [s.matSgp, s]));
+
+      const conflitoSet = new Set<string>();
+      const tetoMap = new Map<string, number>();
+      const pjesMensalMap = new Map<string, number>();
+      const diariasOperacaoMap = new Map<string, number>();
+
+      if (matsReferenciados.length) {
+        const existentes = await queryRunner.manager
+          .createQueryBuilder(EscalaEntity, 'e')
+          .select('e.mat_escala', 'mat')
+          .addSelect('e.data_inicio', 'data')
+          .addSelect('e.sistema', 'sistema')
+          .addSelect('e.tipo_escala', 'tipo')
+          .addSelect('e.operacao_id', 'operacaoid')
+          .addSelect('e.cota_escala', 'cota')
+          .where('e.mat_escala IN (:...mats)', { mats: matsReferenciados })
+          .getRawMany<{
+            mat: string;
+            data: string;
+            sistema: string;
+            tipo: string;
+            operacaoid: number;
+            cota: number;
+          }>();
+
+        for (const row of existentes) {
+          const dataRow = this.paraDataString(row.data);
+
+          conflitoSet.add(`${row.mat}|${dataRow}|${row.sistema}`);
+
+          const chaveTeto = `${row.operacaoid}|${row.tipo}`;
+          tetoMap.set(
+            chaveTeto,
+            (tetoMap.get(chaveTeto) ?? 0) + Number(row.cota),
+          );
+
+          if (row.sistema === 'PJES') {
+            const [ano, mes] = dataRow.split('-');
+            const chave = `${row.mat}|${Number(mes)}|${Number(ano)}`;
+            pjesMensalMap.set(
+              chave,
+              (pjesMensalMap.get(chave) ?? 0) + Number(row.cota),
+            );
+          }
+
+          if (row.sistema === 'DIARIAS') {
+            const chave = `${row.mat}|${row.operacaoid}`;
+            diariasOperacaoMap.set(
+              chave,
+              (diariasOperacaoMap.get(chave) ?? 0) + Number(row.cota),
+            );
+          }
+        }
+      }
+
+      const novosRegistros: Partial<EscalaEntity>[] = [];
+
+      for (const { linha, dto } of linhasValidas) {
+        const mensagensLinha: string[] = [];
+
+        const operacao = operacaoMap.get(dto.operacaoId);
+        if (!operacao)
+          mensagensLinha.push(`Operação ${dto.operacaoId} não encontrada`);
+        if (operacao && operacao.evento.status_evento !== 'CRIADO') {
+          mensagensLinha.push(
+            `Operação ${dto.operacaoId} está com evento em status ${operacao.evento.status_evento} (só aceita lançamentos em CRIADO)`,
+          );
+        }
+
+        const usuario = usuarioMap.get(dto.usuarioId);
+        if (!usuario)
+          mensagensLinha.push(`Usuário ${dto.usuarioId} não encontrado`);
+
+        const sgp = usuario ? sgpMap.get(usuario.mat) : undefined;
+        if (usuario && !sgp) {
+          mensagensLinha.push(
+            `Não há registro em dadosSgp para a matrícula ${usuario.mat} (usuarioId ${dto.usuarioId})`,
+          );
+        }
+
+        let viatura: ViaturaEntity | undefined;
+        if (dto.viaturaId !== undefined) {
+          if (!this.FUNCOES_COM_VIATURA.includes(dto.funcao)) {
+            mensagensLinha.push(
+              `A função "${dto.funcao}" não permite atribuição de viatura`,
+            );
+          }
+          viatura = viaturaMap.get(dto.viaturaId);
+          if (!viatura) {
+            mensagensLinha.push(`Viatura ${dto.viaturaId} não encontrada`);
+          } else if (operacao && viatura.omeId !== operacao.evento?.ome?.id) {
+            mensagensLinha.push(
+              `Viatura ${dto.viaturaId} não pertence à OME do evento da operação ${dto.operacaoId}`,
+            );
+          }
+        }
+
+        if (mensagensLinha.length > 0 || !operacao || !usuario || !sgp) {
+          erros.push({ linha, mensagens: mensagensLinha });
+          continue;
+        }
+
+        const cota = this.calcularCota(
+          dto.horaInicio,
+          dto.horaFim,
+          dto.sistema,
+        );
+
+        const chaveConflito = `${sgp.matSgp}|${dto.dataInicio}|${dto.sistema}`;
+        if (conflitoSet.has(chaveConflito)) {
+          mensagensLinha.push(
+            `Matrícula ${sgp.matSgp} já está escalada em ${dto.dataInicio} para ${dto.sistema} (registro existente ou duplicado na própria planilha)`,
+          );
+        }
+
+        const chaveTeto = `${dto.operacaoId}|${sgp.tipoSgp}`;
+        const somaTeto = tetoMap.get(chaveTeto) ?? 0;
+        if (
+          sgp.tipoSgp === 'O' &&
+          somaTeto + cota > operacao.qtd_oficiais_oper
+        ) {
+          mensagensLinha.push(
+            `Sem cotas de Oficiais disponíveis na Operação ${dto.operacaoId}`,
+          );
+        }
+        if (sgp.tipoSgp === 'P' && somaTeto + cota > operacao.qtd_pracas_oper) {
+          mensagensLinha.push(
+            `Sem cotas de Praças disponíveis na Operação ${dto.operacaoId}`,
+          );
+        }
+
+        let chavePjes = '';
+        if (dto.sistema === 'PJES') {
+          const [ano, mes] = dto.dataInicio.split('-');
+          chavePjes = `${sgp.matSgp}|${Number(mes)}|${Number(ano)}`;
+          const soma = pjesMensalMap.get(chavePjes) ?? 0;
+          if (soma + cota > 12) {
+            mensagensLinha.push(
+              `Matrícula ${sgp.matSgp} excede o limite de 12 cotas PJES no mês ${mes}/${ano}`,
+            );
+          }
+        }
+
+        let chaveDiarias = '';
+        if (dto.sistema === 'DIARIAS') {
+          chaveDiarias = `${sgp.matSgp}|${dto.operacaoId}`;
+          const soma = diariasOperacaoMap.get(chaveDiarias) ?? 0;
+          if (soma + cota > 30) {
+            mensagensLinha.push(
+              `Matrícula ${sgp.matSgp} excede o limite de 30 cotas DIARIAS na Operação ${dto.operacaoId}`,
+            );
+          }
+        }
+
+        if (mensagensLinha.length > 0) {
+          erros.push({ linha, mensagens: mensagensLinha });
+          continue;
+        }
+
+        conflitoSet.add(chaveConflito);
+        tetoMap.set(chaveTeto, somaTeto + cota);
+        if (chavePjes)
+          pjesMensalMap.set(
+            chavePjes,
+            (pjesMensalMap.get(chavePjes) ?? 0) + cota,
+          );
+        if (chaveDiarias)
+          diariasOperacaoMap.set(
+            chaveDiarias,
+            (diariasOperacaoMap.get(chaveDiarias) ?? 0) + cota,
+          );
+
+        novosRegistros.push({
+          sistema: dto.sistema,
+          operacao: { id: dto.operacaoId } as Operacao,
+          usuario: { id: dto.usuarioId } as UserEntity,
+          pg_escala: sgp.pgSgp,
+          mat_escala: sgp.matSgp,
+          ng_escala: sgp.nomeGuerraSgp,
+          tipo_escala: sgp.tipoSgp,
+          cpf_escala: sgp.cpfSgp,
+          nomecompleto_escala: sgp.nomeCompletoSgp,
+          nomeome_escala: usuario.ome?.nomeOme ?? '',
+          nunfunc_escala: sgp.nunfuncSgp,
+          nunvinc_escala: sgp.nunvincSgp,
+          conta: usuario.conta ?? undefined,
+          dataInicio: dto.dataInicio,
+          horaInicio: dto.horaInicio,
+          horaFim: dto.horaFim,
+          cota_escala: cota,
+          localApresentacao:
+            dto.localApresentacao ?? sgp.localApresentacaoSgp ?? 'SEDE DA OME',
+          funcao: dto.funcao,
+          situacao: dto.situacao ?? 'REGULAR',
+          anotacoes: dto.anotacoes,
+          viaturaId: dto.viaturaId ?? undefined,
+        });
+      }
+
+      if (erros.length > 0) {
+        await queryRunner.rollbackTransaction();
+        throw new BadRequestException({
+          message:
+            'A planilha contém inconsistências de regras de negócio. Nenhum registro foi importado.',
+          totalLinhas: linhasBrutas.length,
+          totalErros: erros.length,
+          erros,
+        });
+      }
+
+      const TAMANHO_LOTE = 500;
+      for (let i = 0; i < novosRegistros.length; i += TAMANHO_LOTE) {
+        await queryRunner.manager.insert(
+          EscalaEntity,
+          novosRegistros.slice(i, i + TAMANHO_LOTE),
+        );
+      }
+
+      await queryRunner.commitTransaction();
+
+      return {
+        inseridos: novosRegistros.length,
+        mensagem: `${novosRegistros.length} escalas importadas com sucesso`,
+      };
+    } catch (error) {
+      if (queryRunner.isTransactionActive)
+        await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }

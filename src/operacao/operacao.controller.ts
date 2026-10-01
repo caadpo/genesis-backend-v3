@@ -44,8 +44,16 @@ export class OperacaoController {
   }
 
   @Get()
-  findAll(@Query('eventoId') eventoId?: string) {
-    return this.service.findAll(eventoId ? Number(eventoId) : undefined);
+  findAll(
+    @Query('eventoId') eventoId?: string,
+    @Query('mes') mes?: string,
+    @Query('ano') ano?: string,
+  ) {
+    return this.service.findAll(
+      eventoId ? Number(eventoId) : undefined,
+      mes ? Number(mes) : undefined,
+      ano ? Number(ano) : undefined,
+    );
   }
 
   @Get(':id')

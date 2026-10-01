@@ -107,31 +107,92 @@ export class EscalaEntity {
   @Column({ type: 'integer', nullable: true, name: 'repasse_origem_id' })
   repasseOrigemId?: number | null;
 
+  // ── Presença ────────────────────────────────────────────────────────────
+  // Só o próprio usuário escalado confirma, a partir de 15 min antes do
+  // início da escala (ver EscalaService.calcularJanelaEscala).
+  @Column({ type: 'boolean', default: false, name: 'presenca_confirmada' })
+  presencaConfirmada!: boolean; // Sim ou Não
+
   @Column({
     name: 'presenca_confirmada_por_id',
     nullable: true,
   })
-  presencaConfirmadaPorId?: number;
-
-  @Column({ type: 'boolean', default: false, name: 'presenca_confirmada' })
-  presencaConfirmada!: boolean;
-
-  @Column({ type: 'text', name: 'presenca_observacao', nullable: true })
-  presencaObservacao?: string | null;
-
-  @Column({ type: 'timestamp', name: 'presenca_confirmada_em', nullable: true })
-  presencaConfirmadaEm?: Date | null;
+  presencaConfirmadaPorId?: number; // ID do usuário que confirmou a presença (o próprio escalado)
 
   @ManyToOne(() => UserEntity, { nullable: true, eager: false })
   @JoinColumn({ name: 'presenca_confirmada_por_id' })
   presencaConfirmadaPor?: UserEntity | null;
 
-  @ManyToOne(() => UserEntity, { nullable: true, eager: false })
-  @JoinColumn({ name: 'observacao_escrita_por_id' })
-  observacaoEscritaPor!: UserEntity | null;
+  @Column({ type: 'timestamp', name: 'presenca_confirmada_em', nullable: true })
+  presencaConfirmadaEm?: Date | null;
 
-  @Column({ name: 'observacao_escrita_em', type: 'timestamp', nullable: true })
-  observacaoEscritaEm!: Date | null;
+  @Column({
+    type: 'double precision',
+    name: 'presenca_latitude',
+    nullable: true,
+  })
+  presencaLatitude?: number | null;
+
+  @Column({
+    type: 'double precision',
+    name: 'presenca_longitude',
+    nullable: true,
+  })
+  presencaLongitude?: number | null;
+
+  // ── Saída de serviço ────────────────────────────────────────────────────
+  // Liberada assim que a presença é confirmada. Se o usuário não confirmar,
+  // o sistema fecha automaticamente ao término da escala (cron em
+  // EscalaService.encerrarSaidasAutomaticamente).
+  @Column({ type: 'boolean', default: false, name: 'saida_confirmada' })
+  saidaConfirmada!: boolean;
+
+  @Column({ name: 'saida_confirmada_por_id', nullable: true })
+  saidaConfirmadaPorId?: number | null; // null quando o fechamento foi automático (sistema)
+
+  @ManyToOne(() => UserEntity, { nullable: true, eager: false })
+  @JoinColumn({ name: 'saida_confirmada_por_id' })
+  saidaConfirmadaPor?: UserEntity | null;
+
+  @Column({ type: 'timestamp', name: 'saida_confirmada_em', nullable: true })
+  saidaConfirmadaEm?: Date | null;
+
+  // ── 1ª verificação (fiscal) ─────────────────────────────────────────────
+  // idVerificador1 só pode ser um usuário escalado como FISCAL na mesma
+  // operação/data (ver EscalaService.validarFiscal). dataHoraVerificador1 é
+  // atualizada tanto ao marcar o boolean quanto ao gravar a observação.
+  @Column({ type: 'boolean', default: false, name: 'primeira_verificacao' })
+  primeiraVerificacao!: boolean;
+
+  @Column({ name: 'id_verificador1', nullable: true })
+  idVerificador1?: number | null;
+
+  @ManyToOne(() => UserEntity, { nullable: true, eager: false })
+  @JoinColumn({ name: 'id_verificador1' })
+  verificador1?: UserEntity | null;
+
+  @Column({ type: 'timestamp', name: 'data_hora_verificador1', nullable: true })
+  dataHoraVerificador1?: Date | null;
+
+  @Column({ type: 'text', name: 'obs_verificador1', nullable: true })
+  obsVerificador1?: string | null;
+
+  // ── 2ª verificação (fiscal) ─────────────────────────────────────────────
+  @Column({ type: 'boolean', default: false, name: 'segunda_verificacao' })
+  segundaVerificacao!: boolean;
+
+  @Column({ name: 'id_verificador2', nullable: true })
+  idVerificador2?: number | null;
+
+  @ManyToOne(() => UserEntity, { nullable: true, eager: false })
+  @JoinColumn({ name: 'id_verificador2' })
+  verificador2?: UserEntity | null;
+
+  @Column({ type: 'timestamp', name: 'data_hora_verificador2', nullable: true })
+  dataHoraVerificador2?: Date | null;
+
+  @Column({ type: 'text', name: 'obs_verificador2', nullable: true })
+  obsVerificador2?: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;

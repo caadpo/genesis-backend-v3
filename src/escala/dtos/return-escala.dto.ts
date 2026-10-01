@@ -12,6 +12,14 @@ export class ReturnViaturaResumoDto {
   }
 }
 
+/** Nomes já resolvidos ("PG MAT NOME_GUERRA") vindos de EscalaService.resolverNomes */
+export interface NomesEscalaResolvidos {
+  confirmador?: string | null;
+  saidaPor?: string | null;
+  verificador1?: string | null;
+  verificador2?: string | null;
+}
+
 export class ReturnEscalaDto {
   id: number;
   sistema: string;
@@ -47,7 +55,6 @@ export class ReturnEscalaDto {
   nomeOme?: string;
   status_teto?: string;
 
-  // Novos campos relacionados
   conta?: {
     banco: string;
     agencia: string;
@@ -55,19 +62,39 @@ export class ReturnEscalaDto {
   } | null;
   phone?: string | null;
 
-  presencaConfirmada!: boolean;
-  presencaObservacao?: string | null;
-  presencaConfirmadaEm?: Date | null;
-  presencaConfirmadaPorNome?: string | null;
-  comentario_pagamento?: string | null;
-  observacaoEscritaPorNome!: string | null;
-  observacaoEscritaEm!: Date | null;
+  // ── Presença ──
+  presencaConfirmada: boolean;
+  presencaConfirmadaEm: Date | null;
+  presencaLatitude: number | null;
+  presencaLongitude: number | null;
+  presencaConfirmadaPorId: number | null;
+  presencaConfirmadaPorNome: string | null;
 
-  constructor(
-    e: EscalaEntity,
-    nomeConfirmador?: string | null,
-    nomeObsAutor?: string | null,
-  ) {
+  // ── Saída ──
+  saidaConfirmada: boolean;
+  saidaConfirmadaEm: Date | null;
+  saidaConfirmadaPorId: number | null;
+  saidaConfirmadaPorNome: string | null;
+  /** true quando o sistema fechou a saída (cron), e não o próprio usuário */
+  saidaAutomatica: boolean;
+
+  // ── 1ª verificação ──
+  primeiraVerificacao: boolean;
+  idVerificador1: number | null;
+  verificador1Nome: string | null;
+  dataHoraVerificador1: Date | null;
+  obsVerificador1: string | null;
+
+  // ── 2ª verificação ──
+  segundaVerificacao: boolean;
+  idVerificador2: number | null;
+  verificador2Nome: string | null;
+  dataHoraVerificador2: Date | null;
+  obsVerificador2: string | null;
+
+  comentario_pagamento?: string | null;
+
+  constructor(e: EscalaEntity, nomes: NomesEscalaResolvidos = {}) {
     this.id = e.id;
     this.sistema = e.sistema;
     this.pg_escala = e.pg_escala;
@@ -111,12 +138,37 @@ export class ReturnEscalaDto {
       : null;
     this.phone = e.usuario?.phone ?? null;
 
+    // Presença
     this.presencaConfirmada = e.presencaConfirmada ?? false;
-    this.presencaObservacao = e.presencaObservacao ?? null;
     this.presencaConfirmadaEm = e.presencaConfirmadaEm ?? null;
-    this.presencaConfirmadaPorNome = nomeConfirmador ?? null;
+    this.presencaLatitude = e.presencaLatitude ?? null;
+    this.presencaLongitude = e.presencaLongitude ?? null;
+    this.presencaConfirmadaPorId = e.presencaConfirmadaPorId ?? null;
+    this.presencaConfirmadaPorId = e.presencaConfirmadaPorId ?? null;
+    this.presencaConfirmadaPorNome = nomes.confirmador ?? null;
+
+    // Saída
+    this.saidaConfirmada = e.saidaConfirmada ?? false;
+    this.saidaConfirmadaEm = e.saidaConfirmadaEm ?? null;
+    this.saidaConfirmadaPorId = e.saidaConfirmadaPorId ?? null;
+    this.saidaConfirmadaPorNome = nomes.saidaPor ?? null;
+    this.saidaAutomatica =
+      (e.saidaConfirmada ?? false) && e.saidaConfirmadaPorId == null;
+
+    // 1ª verificação
+    this.primeiraVerificacao = e.primeiraVerificacao ?? false;
+    this.idVerificador1 = e.idVerificador1 ?? null;
+    this.verificador1Nome = nomes.verificador1 ?? null;
+    this.dataHoraVerificador1 = e.dataHoraVerificador1 ?? null;
+    this.obsVerificador1 = e.obsVerificador1 ?? null;
+
+    // 2ª verificação
+    this.segundaVerificacao = e.segundaVerificacao ?? false;
+    this.idVerificador2 = e.idVerificador2 ?? null;
+    this.verificador2Nome = nomes.verificador2 ?? null;
+    this.dataHoraVerificador2 = e.dataHoraVerificador2 ?? null;
+    this.obsVerificador2 = e.obsVerificador2 ?? null;
+
     this.comentario_pagamento = null;
-    this.observacaoEscritaPorNome = nomeObsAutor ?? null;
-    this.observacaoEscritaEm = e.observacaoEscritaEm ?? null;
   }
 }

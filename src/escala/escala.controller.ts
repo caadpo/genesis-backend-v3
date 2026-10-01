@@ -19,6 +19,11 @@ import { RolesGuard } from 'src/guards/roles.guard';
 import { Roles } from 'src/decorators/roles.decorator';
 import { UserType } from 'src/user/enum/user-type.enum';
 import { EscalaService } from './escala.service';
+import { ConfirmarPresencaDto } from './dtos/confirmar-presenca.dto';
+
+import { UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 
 import { Res } from '@nestjs/common';
 import type { Response } from 'express';
@@ -83,8 +88,8 @@ export class EscalaController {
     UserType.GESTOR_VERBA,
     UserType.COMUN,
   )
-  findByCodOp(@Param('codOp') codOp: string) {
-    return this.service.findByCodOp(codOp);
+  findByCodOp(@Param('codOp') codOp: string, @Request() req: any) {
+    return this.service.findByCodOp(codOp, req.user);
   }
 
   @Get('pdf')
@@ -125,6 +130,7 @@ export class EscalaController {
     res.end(buffer);
   }
 
+  // ── Presença: só o próprio escalado, a partir de 15 min antes do início ──────
   @Patch(':id/presenca')
   @Roles(
     UserType.MASTER,
@@ -139,16 +145,69 @@ export class EscalaController {
   )
   confirmarPresenca(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { confirmado: boolean; observacao?: string },
+    @Body() dto: ConfirmarPresencaDto,
     @Request() req: any,
   ) {
-    console.log('req.user:', req.user); // 👈 debug temporário
-    return this.service.confirmarPresenca(
-      id,
-      body.confirmado,
-      body.observacao,
-      req.user,
-    );
+    return this.service.confirmarPresenca(id, dto, req.user);
+  }
+
+  // ── Saída: liberada assim que a presença for confirmada ──────────────────────
+  @Patch(':id/saida')
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.AUXILIAR,
+    UserType.DIRETOR,
+    UserType.ESTRATEGICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.COMUN,
+    UserType.GESTOR_VERBA,
+  )
+  confirmarSaida(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    return this.service.confirmarSaida(id, req.user);
+  }
+
+  // ── Verificação por fiscal — 1ª ronda ────────────────────────────────────────
+  @Patch(':id/verificacao1')
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.AUXILIAR,
+    UserType.DIRETOR,
+    UserType.ESTRATEGICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.COMUN,
+    UserType.GESTOR_VERBA,
+  )
+  registrarVerificacao1(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { verificado?: boolean; observacao?: string },
+    @Request() req: any,
+  ) {
+    return this.service.registrarVerificacao(id, 1, body, req.user);
+  }
+
+  // ── Verificação por fiscal — 2ª ronda ────────────────────────────────────────
+  @Patch(':id/verificacao2')
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.AUXILIAR,
+    UserType.DIRETOR,
+    UserType.ESTRATEGICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.COMUN,
+    UserType.GESTOR_VERBA,
+  )
+  registrarVerificacao2(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { verificado?: boolean; observacao?: string },
+    @Request() req: any,
+  ) {
+    return this.service.registrarVerificacao(id, 2, body, req.user);
   }
 
   @Get('minhas')
@@ -196,7 +255,7 @@ export class EscalaController {
   @Post()
   @Roles(UserType.MASTER, UserType.TECNICO, UserType.AUXILIAR)
   create(@Body() dto: CreateEscalaDto, @Request() req: any) {
-    return this.service.create(dto, req.user); // ✅ passa o usuário logado
+    return this.service.create(dto, req.user);
   }
 
   @Patch(':id')
@@ -206,12 +265,28 @@ export class EscalaController {
     @Body() dto: UpdateEscalaDto,
     @Request() req: any,
   ) {
-    return this.service.update(id, dto, req.user); // ✅ passa o usuário logado
+    return this.service.update(id, dto, req.user);
   }
 
   @Delete(':id')
   @Roles(UserType.MASTER, UserType.TECNICO, UserType.AUXILIAR)
   remove(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
-    return this.service.remove(id, req.user); // ✅ passa o usuário logado
+    return this.service.remove(id, req.user);
+  }
+
+  @Post('upload')
+  @Roles(UserType.MASTER)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
+    }),
+  )
+  async uploadPlanilha(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: any,
+  ) {
+    if (!file) throw new BadRequestException('Nenhum arquivo foi enviado');
+    return this.service.bulkUpload(file.buffer, req.user);
   }
 }

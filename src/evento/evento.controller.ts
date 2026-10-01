@@ -136,16 +136,21 @@ export class EventoController {
     UserType.FINANCEIRO,
     UserType.PD,
     UserType.GESTOR_VERBA,
+    UserType.COMUN, // ✅ modal de filtro (OME → Evento → Operação) é aberta a qualquer usuário
   )
   findAll(
     @Query('distribuicaoId') distribuicaoId?: string,
     @Query('omeId') omeId?: string,
+    @Query('mes') mes?: string,
+    @Query('ano') ano?: string,
     @Req() req?: any,
   ) {
     return this.service.findAll(
       distribuicaoId ? Number(distribuicaoId) : undefined,
       omeId ? Number(omeId) : undefined,
       req?.user as UserEntity,
+      mes ? Number(mes) : undefined,
+      ano ? Number(ano) : undefined,
     );
   }
 
