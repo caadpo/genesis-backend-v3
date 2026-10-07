@@ -422,26 +422,20 @@ export class EscalaService {
     }
   }
 
-  /** Confirma se o usuário está escalado como FISCAL na mesma operação/data. */
-  private async validarFiscal(
-    usuarioId: number,
-    operacaoId: number,
-    dataInicio: string,
-  ): Promise<void> {
-    const ehFiscal = await this.repo.exists({
-      where: {
-        usuario: { id: usuarioId },
-        operacao: { id: operacaoId },
-        dataInicio,
-        funcao: 'FISCAL',
-      },
+  /**
+   * Confirma se o usuário logado tem tipoSgp = 'O' (Oficial) pelo registro
+   * dadosSgp vinculado à sua matrícula. Substitui a antiga regra de
+   * "precisa estar escalado como FISCAL nesta operação/data".
+   */
+  private async eUsuarioTipoOficial(usuarioId: number): Promise<boolean> {
+    const usuario = await this.userRepo.findOne({ where: { id: usuarioId } });
+    if (!usuario) return false;
+
+    const sgp = await this.dadosSgpRepo.findOne({
+      where: { matSgp: usuario.mat },
     });
 
-    if (!ehFiscal) {
-      throw new ForbiddenException(
-        'Somente usuários escalados como FISCAL nesta operação/data podem realizar a verificação',
-      );
-    }
+    return sgp?.tipoSgp === 'O';
   }
 
   // ── Find minhas escalas ─────────────────────────────────────────────────────
@@ -885,16 +879,12 @@ export class EscalaService {
 
     const sgpMap = await this.construirMapaNomes(escalas);
 
-    // Operação|data em que o usuário logado está escalado como FISCAL
-    // (mesma regra do validarFiscal, resolvida em memória)
-    const chavesFiscal = new Set<string>();
-    if (usuarioLogado) {
-      for (const e of escalas) {
-        if (e.usuario?.id === usuarioLogado.id && e.funcao === 'FISCAL') {
-          chavesFiscal.add(`${e.operacao?.id}|${e.dataInicio}`);
-        }
-      }
-    }
+    // Regra atual: qualquer usuário com tipoSgp = 'O' (Oficial) pode
+    // registrar verificação — não depende mais de estar escalado como
+    // FISCAL nesta operação/data.
+    const usuarioEhOficial = usuarioLogado
+      ? await this.eUsuarioTipoOficial(usuarioLogado.id)
+      : false;
 
     const minhaVerificacao = (e: EscalaEntity): 1 | 2 | null => {
       if (!usuarioLogado) return null;
@@ -906,7 +896,7 @@ export class EscalaService {
     return escalas.map((e) => ({
       ...new ReturnEscalaDto(e, this.resolverNomes(e, sgpMap)),
       minhaVerificacao: minhaVerificacao(e),
-      podeVerificar: chavesFiscal.has(`${e.operacao?.id}|${e.dataInicio}`),
+      podeVerificar: usuarioEhOficial,
     }));
   }
 
@@ -1094,11 +1084,12 @@ export class EscalaService {
       );
     }
 
-    await this.validarFiscal(
-      usuarioLogado.id,
-      escala.operacao.id,
-      escala.dataInicio,
-    );
+    const ehOficial = await this.eUsuarioTipoOficial(usuarioLogado.id);
+    if (!ehOficial) {
+      throw new ForbiddenException(
+        'Somente usuários com tipo Oficial (O) podem realizar a verificação',
+      );
+    }
 
     const idAtual =
       numero === 1 ? escala.idVerificador1 : escala.idVerificador2;
