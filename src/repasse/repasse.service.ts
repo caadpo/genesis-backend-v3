@@ -152,10 +152,13 @@ export class RepasseService {
       .where('r.status_repasse = :status', { status: StatusRepasse.ABERTO })
       .andWhere('r.tipo_escala_repasse = :tipo', { tipo: tipoEscala })
       .andWhere('r.ofertante_id != :userId', { userId: usuarioLogado.id })
-      .andWhere('(r.destinatario_id IS NULL OR r.destinatario_id = :userId)', {
-        userId: usuarioLogado.id,
-      })
-      .andWhere('evento.ome_id = :omeId', { omeId: usuarioLogado.omeId })
+      .andWhere(
+        `(
+    r.destinatario_id = :userId
+    OR (r.destinatario_id IS NULL AND evento.ome_id = :omeId)
+  )`,
+        { userId: usuarioLogado.id, omeId: usuarioLogado.omeId },
+      )
       .andWhere(
         `(r.data_inicio_repasse::text || ' ' || r.hora_inicio_repasse::text)::timestamp > NOW()`,
       )
@@ -506,10 +509,13 @@ export class RepasseService {
       .where('r.status_repasse = :status', { status: StatusRepasse.ABERTO })
       .andWhere('r.tipo_escala_repasse = :tipo', { tipo: tipoEscala })
       .andWhere('r.ofertante_id != :userId', { userId: usuarioLogado.id })
-      .andWhere('(r.destinatario_id IS NULL OR r.destinatario_id = :userId)', {
-        userId: usuarioLogado.id,
-      })
-      .andWhere('evento.ome_id = :omeId', { omeId: usuarioLogado.omeId })
+      .andWhere(
+        `(
+    r.destinatario_id = :userId
+    OR (r.destinatario_id IS NULL AND evento.ome_id = :omeId)
+  )`,
+        { userId: usuarioLogado.id, omeId: usuarioLogado.omeId },
+      )
       .andWhere(
         `(r.data_inicio_repasse::text || ' ' || r.hora_inicio_repasse::text)::timestamp > NOW()`,
       )
