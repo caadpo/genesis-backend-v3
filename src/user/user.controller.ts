@@ -10,6 +10,7 @@ import {
   Query,
   Request,
   Patch,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UserEntity } from './entities/user.entity';
@@ -22,6 +23,7 @@ import { RolesGuard } from 'src/guards/roles.guard';
 import { UserSearchDto } from './dtos/user-search.dto';
 import { ChangePasswordDto } from './dtos/change-password.dto';
 import { UpdatePhoneDto } from './dtos/update-phone.dto';
+import { sanitizeUser } from 'src/utils/sanitize-user';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('user')
@@ -30,13 +32,16 @@ export class UserController {
 
   @Post()
   @Roles(UserType.MASTER)
-  async createUser(@Body() dto: CreateUserDto): Promise<UserEntity> {
-    return this.userService.createUser(dto);
+  async createUser(@Body() dto: CreateUserDto) {
+    return sanitizeUser(await this.userService.createUser(dto));
   }
 
   @Patch(':id/ativo')
   @Roles(UserType.MASTER, UserType.TECNICO, UserType.AUXILIAR)
-  async toggleAtivo(@Param('id') id: number, @Request() req: any) {
+  async toggleAtivo(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+  ) {
     return this.userService.toggleAtivo(id, req.user);
   }
 
@@ -67,18 +72,29 @@ export class UserController {
   }
 
   @Get(':id')
-  async getUser(@Param('id') id: number): Promise<UserEntity> {
-    return this.userService.findById(id);
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.DIRETOR,
+    UserType.AUXILIAR,
+    UserType.ESTRATEGICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.GESTOR_VERBA,
+    UserType.COMUN,
+  )
+  async getUser(@Param('id', ParseIntPipe) id: number) {
+    return sanitizeUser(await this.userService.findById(id));
   }
 
   @Put(':id')
   @Roles(UserType.MASTER, UserType.AUXILIAR)
   async updateUser(
-    @Param('id') id: number,
+    @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateUserDto,
     @Request() req: any,
-  ): Promise<UserEntity> {
-    return this.userService.updateUser(id, dto, req.user);
+  ) {
+    return sanitizeUser(await this.userService.updateUser(id, dto, req.user));
   }
 
   @Roles(
@@ -105,7 +121,10 @@ export class UserController {
 
   @Put(':id/reset-password')
   @Roles(UserType.MASTER, UserType.AUXILIAR)
-  async resetPassword(@Param('id') id: number, @Request() req: any) {
+  async resetPassword(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+  ) {
     await this.userService.resetPasswordToGenesis(req.user.id, id);
     return { message: 'Senha resetada para o padrão genesis' };
   }
@@ -126,7 +145,9 @@ export class UserController {
     @Request() req: any,
     @Body() body: { imagemUrl: string },
   ) {
-    return this.userService.updateOwnImagem(req.user.id, body.imagemUrl);
+    return sanitizeUser(
+      await this.userService.updateOwnImagem(req.user.id, body.imagemUrl),
+    );
   }
 
   @Roles(
@@ -142,12 +163,14 @@ export class UserController {
   )
   @Put('me/phone')
   async updateOwnPhone(@Request() req: any, @Body() dto: UpdatePhoneDto) {
-    return this.userService.updateOwnPhone(req.user.id, dto.phone);
+    return sanitizeUser(
+      await this.userService.updateOwnPhone(req.user.id, dto.phone),
+    );
   }
 
   @Delete(':id')
   @Roles(UserType.MASTER)
-  async deleteUser(@Param('id') id: number) {
+  async deleteUser(@Param('id', ParseIntPipe) id: number) {
     await this.userService.deleteUser(id);
     return { message: 'Usuário removido com sucesso' };
   }

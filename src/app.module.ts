@@ -19,6 +19,7 @@ import { PagamentoModule } from './pagamento/pagamento.module';
 import { RepasseModule } from './repasse/repasse.module';
 import { ViaturaModule } from './viatura/viatura.module';
 import { DadosSgpModule } from './dadossgp/dadossgp.module';
+import { AvisosModule } from './aviso/aviso.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { DadosSgpModule } from './dadossgp/dadossgp.module';
     PagamentoModule,
     RepasseModule,
     ViaturaModule,
+    AvisosModule,
   ],
   controllers: [AppController],
   providers: [AppService],

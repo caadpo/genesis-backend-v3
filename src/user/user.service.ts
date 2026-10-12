@@ -32,9 +32,10 @@ export class UserService {
       error instanceof QueryFailedError &&
       (error as any).driverError?.code === '23505'
     ) {
-      const constraint = (error as any).driverError?.constraint;
+      const constraint: string | undefined = (error as any).driverError
+        ?.constraint;
 
-      if (constraint.includes('mat')) {
+      if (constraint?.includes('mat')) {
         throw new BadRequestException('Essa Matrícula já está cadastrada');
       }
     }
@@ -42,14 +43,37 @@ export class UserService {
     throw error;
   }
 
+  // Lê o usuário logado do banco, não do JWT (que pode estar desatualizado)
+  private async getRequester(id: number) {
+    const u = await this.userRepository.findOne({ where: { id } });
+    if (!u) throw new ForbiddenException('Usuário logado não encontrado');
+    return { id: u.id, typeUser: Number(u.typeUser), omeId: u.omeId };
+  }
+
+  // Auxiliar só pode agir sobre alvos AUXILIAR ou COMUN
+  private isAlvoPermitidoParaAuxiliar(typeUser: UserType | number): boolean {
+    const t = Number(typeUser);
+    return t === UserType.AUXILIAR || t === UserType.COMUN;
+  }
+
+  // Remove o hash da senha antes de devolver ao controller
+  private semSenha<T extends { password?: string }>(
+    user: T,
+  ): Omit<T, 'password'> {
+    const { password, ...rest } = user;
+    return rest;
+  }
+
   async toggleAtivo(
     targetId: number,
-    usuarioLogado: { id: number; typeUser: number; omeId: number },
+    usuarioJwt: { id: number; typeUser: number; omeId: number },
   ): Promise<{ ativo: boolean }> {
+    const usuarioLogado = await this.getRequester(usuarioJwt.id);
+
     const isMasterOuTecnico =
-      Number(usuarioLogado.typeUser) === UserType.MASTER ||
-      Number(usuarioLogado.typeUser) === UserType.TECNICO;
-    const isAuxiliar = Number(usuarioLogado.typeUser) === UserType.AUXILIAR;
+      usuarioLogado.typeUser === UserType.MASTER ||
+      usuarioLogado.typeUser === UserType.TECNICO;
+    const isAuxiliar = usuarioLogado.typeUser === UserType.AUXILIAR;
 
     if (!isMasterOuTecnico && !isAuxiliar) {
       throw new ForbiddenException(
@@ -59,11 +83,17 @@ export class UserService {
 
     const target = await this.findById(targetId);
 
-    // AUXILIAR só pode ativar/inativar usuários da sua OME
-    if (isAuxiliar && target.omeId !== usuarioLogado.omeId) {
-      throw new ForbiddenException(
-        'Auxiliar só pode alterar usuários da sua OME',
-      );
+    if (isAuxiliar) {
+      if (target.omeId !== usuarioLogado.omeId) {
+        throw new ForbiddenException(
+          'Auxiliar só pode alterar usuários da sua OME',
+        );
+      }
+      if (!this.isAlvoPermitidoParaAuxiliar(target.typeUser)) {
+        throw new ForbiddenException(
+          'Auxiliar não pode alterar usuários com perfil superior',
+        );
+      }
     }
 
     target.ativo = !target.ativo;
@@ -296,10 +326,12 @@ export class UserService {
   async updateUser(
     id: number,
     dto: UpdateUserDto,
-    usuarioLogado: { id: number; typeUser: number; omeId: number },
+    usuarioJwt: { id: number; typeUser: number; omeId: number },
   ): Promise<UserEntity> {
-    const isMaster = Number(usuarioLogado.typeUser) === UserType.MASTER;
-    const isAuxiliar = Number(usuarioLogado.typeUser) === UserType.AUXILIAR;
+    const usuarioLogado = await this.getRequester(usuarioJwt.id);
+
+    const isMaster = usuarioLogado.typeUser === UserType.MASTER;
+    const isAuxiliar = usuarioLogado.typeUser === UserType.AUXILIAR;
 
     if (!isMaster && !isAuxiliar) {
       throw new ForbiddenException('Sem permissão para atualizar usuários');
@@ -308,42 +340,65 @@ export class UserService {
     const user = await this.findById(id);
 
     if (isAuxiliar) {
-      // Auxiliar só pode atualizar usuários da sua própria OME
       if (user.omeId !== usuarioLogado.omeId) {
         throw new ForbiddenException(
           'Auxiliar só pode atualizar usuários da sua OME',
         );
       }
 
-      // Auxiliar só pode definir o typeUser como Auxiliar ou COMUN
+      // não pode editar quem tem perfil acima de AUXILIAR/COMUN
+      const tipoAlvo = Number(user.typeUser);
+      if (tipoAlvo !== UserType.AUXILIAR && tipoAlvo !== UserType.COMUN) {
+        throw new ForbiddenException(
+          'Auxiliar não pode alterar usuários com perfil superior',
+        );
+      }
+
       if (
         dto.typeUser !== undefined &&
-        dto.typeUser !== UserType.AUXILIAR &&
-        dto.typeUser !== UserType.COMUN
+        Number(dto.typeUser) !== UserType.AUXILIAR &&
+        Number(dto.typeUser) !== UserType.COMUN
       ) {
         throw new ForbiddenException(
           'Auxiliar só pode definir o tipo de usuário como Auxiliar ou Comum',
         );
       }
 
-      // omeId é livre para o auxiliar (pode mover usuário para qualquer OME)
+      // opcional: impedir auto-transferência
+      if (
+        dto.omeId !== undefined &&
+        dto.omeId !== user.omeId &&
+        user.id === usuarioLogado.id
+      ) {
+        throw new ForbiddenException('Você não pode transferir a si mesmo');
+      }
     }
 
-    if (dto.password) {
-      user.password = await createPasswordHashed(dto.password);
-      delete dto.password;
+    const { omeId, password, ...campos } = dto;
+
+    if (password) {
+      user.password = await createPasswordHashed(password);
     }
 
-    if (dto.omeId) {
-      const ome = await this.omeRepository.findOne({
-        where: { id: dto.omeId },
+    Object.assign(user, campos);
+
+    // Transferência de OME
+    if (omeId !== undefined && omeId !== user.omeId) {
+      const novaOme = await this.omeRepository.findOne({
+        where: { id: omeId },
       });
-      if (!ome) throw new NotFoundException('OME não encontrada');
-      user.ome = ome;
+      if (!novaOme) throw new NotFoundException('OME não encontrada');
+
+      user.ome = novaOme;
+      user.omeId = novaOme.id;
+      user.typeUser = UserType.COMUN; // sempre vira COMUM ao ser transferido
     }
 
-    Object.assign(user, dto);
-    return await this.userRepository.save(user);
+    try {
+      return this.semSenha(await this.userRepository.save(user)) as UserEntity;
+    } catch (error) {
+      this.handleUniqueError(error);
+    }
   }
 
   async changeOwnPassword(
@@ -351,12 +406,16 @@ export class UserService {
     currentPassword: string,
     newPassword: string,
   ): Promise<void> {
-    const user = await this.findById(userId);
+    const user = await this.userRepository
+      .createQueryBuilder('u')
+      .addSelect('u.password')
+      .where('u.id = :id', { id: userId })
+      .getOne();
+
+    if (!user) throw new NotFoundException('Usuário não encontrado');
 
     const match = await validatePassword(currentPassword, user.password);
-    if (!match) {
-      throw new ForbiddenException('Senha atual incorreta');
-    }
+    if (!match) throw new ForbiddenException('Senha atual incorreta');
 
     user.password = await createPasswordHashed(newPassword);
     await this.userRepository.save(user);
@@ -369,20 +428,20 @@ export class UserService {
     const requester = await this.findById(requesterId);
     const target = await this.findById(targetUserId);
 
-    const isMaster = requester.typeUser === UserType.MASTER;
+    const isMaster = Number(requester.typeUser) === UserType.MASTER;
 
-    const isAuxiliarSameOme =
-      requester.typeUser === UserType.AUXILIAR &&
-      requester.omeId === target.omeId;
+    const isAuxiliarValido =
+      Number(requester.typeUser) === UserType.AUXILIAR &&
+      requester.omeId === target.omeId &&
+      this.isAlvoPermitidoParaAuxiliar(target.typeUser);
 
-    if (!isMaster && !isAuxiliarSameOme) {
+    if (!isMaster && !isAuxiliarValido) {
       throw new ForbiddenException(
         'Sem permissão para resetar a senha deste usuário',
       );
     }
 
-    const DEFAULT_PASSWORD = 'genesis';
-    target.password = await createPasswordHashed(DEFAULT_PASSWORD);
+    target.password = await createPasswordHashed('genesis');
     await this.userRepository.save(target);
   }
 
@@ -392,7 +451,7 @@ export class UserService {
   ): Promise<UserEntity> {
     const user = await this.findById(userId);
     user.imagemUrl = imagemUrl;
-    return await this.userRepository.save(user);
+    return this.semSenha(await this.userRepository.save(user)) as UserEntity;
   }
 
   async updateOwnPhone(userId: number, phone: string): Promise<UserEntity> {
@@ -400,7 +459,7 @@ export class UserService {
 
     user.phone = phone;
 
-    return await this.userRepository.save(user);
+    return this.semSenha(await this.userRepository.save(user)) as UserEntity;
   }
 
   // Excluir usuário
