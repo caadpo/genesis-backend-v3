@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
@@ -36,6 +37,8 @@ import ExcelJS from 'exceljs';
 
 @Injectable()
 export class EventoService {
+  private readonly logger = new Logger(EventoService.name);
+
   constructor(
     @InjectRepository(Evento)
     private readonly eventoRepo: Repository<Evento>,
@@ -57,7 +60,10 @@ export class EventoService {
   ) {}
 
   // ─── getResumoEscalas ────────────────────────────────────────────────────────
-  async getResumoEscalas(eventoId: number): Promise<ReturnEventoComEscalasDto> {
+  async getResumoEscalas(
+    eventoId: number,
+    user?: UserEntity,
+  ): Promise<ReturnEventoComEscalasDto> {
     const evento = await this.eventoRepo.findOne({
       where: { id: eventoId },
       relations: [
@@ -71,6 +77,16 @@ export class EventoService {
       ],
     });
     if (!evento) throw new NotFoundException('Evento não encontrado');
+
+    if (
+      user &&
+      Number(user.typeUser) === UserType.AUXILIAR &&
+      Number(user.omeId) !== evento.ome.id
+    ) {
+      throw new ForbiddenException(
+        'Você só pode ver o resumo de eventos da sua OME',
+      );
+    }
 
     // ✅ Todos os campos de identificação do policial vêm das colunas snapshot
     //    da própria tabela escala — sem join com dadosSgp
@@ -479,7 +495,13 @@ export class EventoService {
 
   async alterarStatus(id: number, novoStatus: StatusEvento, user: UserEntity) {
     const evento = await this.findOneEntity(id);
-    this.validarPermissaoDiretoria(evento, user);
+    if (
+      Number(user.typeUser) === UserType.AUXILIAR &&
+      Number(user.omeId) !== evento.ome.id
+    ) {
+      throw new ForbiddenException('Você só pode alterar eventos da sua OME');
+    }
+    await this.validarPermissaoDiretoria(evento, user);
 
     const isAdmin = user.typeUser === 9 || user.typeUser === 10;
     const isAux = user.typeUser === 2;
@@ -549,7 +571,25 @@ export class EventoService {
       evento.pago_por = user;
     }
 
-    await this.eventoRepo.save(evento);
+    await this.eventoRepo.manager.transaction(async (manager) => {
+      if (novoStatus === StatusEvento.HOMOLOGADO) {
+        const [, descartadas] = await manager.query(
+          `DELETE FROM "escala"
+           WHERE "is_vaga_aberta" = true
+             AND "operacao_id" IN (SELECT "id" FROM "operacao" WHERE "evento_id" = $1)`,
+          [id],
+        );
+
+        if (descartadas > 0) {
+          this.logger.log(
+            `Evento ${id} homologado: ${descartadas} vaga(s) em aberto descartada(s)`,
+          );
+        }
+      }
+
+      await manager.save(evento);
+    });
+
     evento.updated_at = agora;
     return new ReturnEventoDto(evento);
   }
@@ -720,6 +760,7 @@ export class EventoService {
     user?: UserEntity,
     mes?: number,
     ano?: number,
+    incluirCompartilhadas = false,
   ): Promise<ReturnEventoComTotalCotasDto[]> {
     const qb = this.eventoRepo
       .createQueryBuilder('e')
@@ -733,7 +774,24 @@ export class EventoService {
       .leftJoinAndSelect('uome.diretoria', 'udir');
 
     if (distribuicaoId) qb.where('d.id = :id', { id: distribuicaoId });
-    if (omeId) qb.andWhere('e.ome_id = :omeId', { omeId });
+    if (omeId) {
+      if (incluirCompartilhadas) {
+        // Eventos da OME + eventos de outras OMEs que tenham ao menos uma
+        // operação compartilhada com ela.
+        qb.andWhere(
+          `(e.ome_id = :omeId OR EXISTS (
+            SELECT 1
+            FROM operacao op3
+            INNER JOIN operacao_ome_compartilhada oc ON oc.operacao_id = op3.id
+            WHERE op3.evento_id = e.id
+              AND oc.ome_id = :omeId
+          ))`,
+          { omeId },
+        );
+      } else {
+        qb.andWhere('e.ome_id = :omeId', { omeId });
+      }
+    }
 
     // ✅ Só entram eventos com alguma escala (de alguma das suas operações)
     // com data_inicio no mês/ano informados — usado pela modal de filtro.
@@ -809,7 +867,7 @@ export class EventoService {
 
   async update(id: number, dto: UpdateEventoDto, user: UserEntity) {
     const evento = await this.findOneEntity(id);
-    this.validarPermissaoDiretoria(evento, user);
+    await this.validarPermissaoDiretoria(evento, user);
 
     // ✅ Se o evento está bloqueado, apenas TECNICO/MASTER podem editar
     const isAdmin = Number(user.typeUser) === 9 || Number(user.typeUser) === 10;
@@ -889,7 +947,7 @@ export class EventoService {
 
   async remove(id: number, user: UserEntity) {
     const evento = await this.findOneEntity(id);
-    this.validarPermissaoDiretoria(evento, user);
+    await this.validarPermissaoDiretoria(evento, user);
 
     const qtdOperacoes = await this.operacaoRepo.count({
       where: { evento: { id } },

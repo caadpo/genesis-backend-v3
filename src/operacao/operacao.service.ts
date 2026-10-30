@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { In } from 'typeorm';
+import { OperacaoOmeCompartilhada } from './entities/operacao-ome-compartilhada.entity';
 
 import { Operacao } from './entities/operacao.entity';
 import { Evento } from 'src/evento/entities/evento.entity';
@@ -34,9 +36,39 @@ export class OperacaoService {
     @InjectRepository(OmeEntity)
     private readonly omeRepo: Repository<OmeEntity>,
 
-    @InjectRepository(UserEntity) // ✅
+    @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
+
+    @InjectRepository(OperacaoOmeCompartilhada)
+    private readonly compRepo: Repository<OperacaoOmeCompartilhada>,
   ) {}
+
+  // ─── Validação das OMEs compartilhadas ──────────────────────────────────────
+
+  private async validarOmesCompartilhadas(
+    omeIds: number[],
+    omeDonaEventoId: number,
+    omeDonaOperacaoId: number,
+  ): Promise<number[]> {
+    const ids = [...new Set(omeIds)];
+
+    if (ids.some((id) => id === omeDonaEventoId || id === omeDonaOperacaoId)) {
+      throw new BadRequestException(
+        'A OME dona da operação não pode ser compartilhada consigo mesma',
+      );
+    }
+
+    if (ids.length) {
+      const encontradas = await this.omeRepo.findBy({ id: In(ids) });
+      if (encontradas.length !== ids.length) {
+        throw new NotFoundException(
+          'Alguma OME informada para compartilhamento não foi encontrada',
+        );
+      }
+    }
+
+    return ids;
+  }
 
   // ─── Validação de status ────────────────────────────────────────────────────
 
@@ -140,6 +172,41 @@ export class OperacaoService {
     return cod;
   }
 
+  // ─── Método complementar ao findAll ──────────────────────────────────────────────────────
+
+  private async enriquecerOperacoes(
+    operacoes: Operacao[],
+  ): Promise<ReturnOperacaoComTotalCotasDto[]> {
+    // Uma única consulta com as OMEs compartilhadas de todas as operações
+    const mapaCompartilhadas = new Map<
+      number,
+      Array<{ id: number; nomeOme: string }>
+    >();
+
+    if (operacoes.length) {
+      const vinculos = await this.compRepo.find({
+        where: { operacao: { id: In(operacoes.map((o) => o.id)) } },
+        relations: { operacao: true, ome: true },
+      });
+      for (const v of vinculos) {
+        const lista = mapaCompartilhadas.get(v.operacao.id) ?? [];
+        lista.push({ id: v.ome.id, nomeOme: v.ome.nomeOme });
+        mapaCompartilhadas.set(v.operacao.id, lista);
+      }
+    }
+
+    return Promise.all(
+      operacoes.map(async (op) => {
+        const cotasPorTipo = await this.getTotalCotasPorTipo(op.id);
+        return new ReturnOperacaoComTotalCotasDto(
+          op,
+          cotasPorTipo,
+          mapaCompartilhadas.get(op.id) ?? [],
+        );
+      }),
+    );
+  }
+
   // ─── Atualização de cod_op ──────────────────────────────────────────────────────
 
   async updateCodOp(
@@ -178,17 +245,21 @@ export class OperacaoService {
   ): Promise<Operacao> {
     const evento = await this.eventoRepo.findOne({
       where: { id: dto.evento_id },
-      relations: ['ome'], // ✅ precisa da OME do evento
+      relations: ['ome'],
     });
     if (!evento) throw new NotFoundException('Evento não encontrado');
 
     this.validarStatusEvento(evento);
-
-    // ✅ Auxiliar só pode criar em eventos da sua OME
     await this.validarPermissaoOme(authUser, evento.ome.id);
 
     const ome = await this.omeRepo.findOneBy({ id: dto.ome_id });
     if (!ome) throw new NotFoundException('OME não encontrada');
+
+    const omesCompartilhadas = await this.validarOmesCompartilhadas(
+      dto.omesCompartilhadas ?? [],
+      evento.ome.id,
+      dto.ome_id,
+    );
 
     const resumo = await this.getResumoEvento(dto.evento_id);
 
@@ -215,7 +286,22 @@ export class OperacaoService {
       qtd_pracas_oper: dto.qtd_pracas_oper,
     });
 
-    return this.operacaoRepo.save(operacao);
+    // Operação + vínculos de compartilhamento: tudo ou nada.
+    return this.operacaoRepo.manager.transaction(async (manager) => {
+      const salva = await manager.save(operacao);
+
+      if (omesCompartilhadas.length) {
+        await manager.insert(
+          OperacaoOmeCompartilhada,
+          omesCompartilhadas.map((omeId) => ({
+            operacao: { id: salva.id },
+            ome: { id: omeId },
+          })),
+        );
+      }
+
+      return salva;
+    });
   }
 
   // ─── Método auxiliar para buscar totalCotas por tipo_escala ────────────────────
@@ -242,6 +328,7 @@ export class OperacaoService {
     eventoId?: number,
     mes?: number,
     ano?: number,
+    compartilhadasComigoOmeId?: number,
   ): Promise<ReturnOperacaoComTotalCotasDto[]> {
     const qb = this.operacaoRepo
       .createQueryBuilder('o')
@@ -267,17 +354,51 @@ export class OperacaoService {
       );
     }
 
+    // Evento de outra OME: devolve só as operações compartilhadas com a minha
+    if (compartilhadasComigoOmeId) {
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM operacao_ome_compartilhada oc
+          WHERE oc.operacao_id = o.id
+            AND oc.ome_id = :omeComp
+        )`,
+        { omeComp: compartilhadasComigoOmeId },
+      );
+    }
+
     const operacoes = await qb.getMany();
+    return this.enriquecerOperacoes(operacoes);
+  }
 
-    // Enriquecer cada operação com totalCotas por tipo_escala
-    const operacoesComCotas = await Promise.all(
-      operacoes.map(async (op) => {
-        const cotasPorTipo = await this.getTotalCotasPorTipo(op.id);
-        return new ReturnOperacaoComTotalCotasDto(op, cotasPorTipo);
-      }),
-    );
+  /**
+   * Operações que OUTRAS OMEs compartilharam com a OME informada.
+   * Traz evento, OME do evento e teto (para montar o link da tela de escala).
+   */
 
-    return operacoesComCotas;
+  async findCompartilhadasComigo(
+    omeId: number,
+  ): Promise<ReturnOperacaoComTotalCotasDto[]> {
+    const operacoes = await this.operacaoRepo
+      .createQueryBuilder('o')
+      .leftJoinAndSelect('o.evento', 'e')
+      .leftJoinAndSelect('e.ome', 'eome')
+      .leftJoinAndSelect('e.distribuicao', 'd')
+      .leftJoinAndSelect('d.teto', 't')
+      .leftJoinAndSelect('o.ome', 'ome')
+      .where(
+        `EXISTS (
+          SELECT 1
+          FROM operacao_ome_compartilhada oc
+          WHERE oc.operacao_id = o.id
+            AND oc.ome_id = :omeId
+        )`,
+        { omeId },
+      )
+      .orderBy('o.created_at', 'DESC')
+      .getMany();
+
+    return this.enriquecerOperacoes(operacoes);
   }
 
   async findOne(id: number): Promise<Operacao> {
@@ -412,5 +533,78 @@ export class OperacaoService {
     }
 
     await this.operacaoRepo.delete(id);
+  }
+
+  // ─── Compartilhamento ───────────────────────────────────────────────────────
+
+  async getCompartilhamento(id: number) {
+    await this.findOne(id);
+    const vinculos = await this.compRepo.find({
+      where: { operacao: { id } },
+      relations: { ome: true },
+    });
+    return vinculos.map((v) => ({ id: v.ome.id, nomeOme: v.ome.nomeOme }));
+  }
+
+  /**
+   * Substitui a lista COMPLETA de OMEs compartilhadas.
+   * - Só a OME dona (ou MASTER/TECNICO), e só com evento CRIADO.
+   * - OMEs removidas: suas VAGAS AINDA ABERTAS são excluídas (liberam cota).
+   *   Escalas já PREENCHIDAS permanecem.
+   */
+  async setCompartilhamento(
+    id: number,
+    omeIds: number[],
+    authUser: { id: number; typeUser: UserType },
+  ) {
+    const operacao = await this.findOne(id);
+
+    this.validarStatusEvento(operacao.evento);
+    await this.validarPermissaoOme(authUser, operacao.evento.ome.id);
+
+    const ids = await this.validarOmesCompartilhadas(
+      omeIds,
+      operacao.evento.ome.id,
+      operacao.ome.id,
+    );
+
+    await this.operacaoRepo.manager.transaction(async (manager) => {
+      const atuais = await manager.find(OperacaoOmeCompartilhada, {
+        where: { operacao: { id } },
+        relations: { ome: true },
+      });
+      const atuaisIds = atuais.map((a) => a.ome.id);
+
+      const removidas = atuaisIds.filter((x) => !ids.includes(x));
+      const novas = ids.filter((x) => !atuaisIds.includes(x));
+
+      if (removidas.length) {
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(EscalaEntity)
+          .where('operacao_id = :id', { id })
+          .andWhere('is_vaga_aberta = true')
+          .andWhere('ome_destino_id IN (:...removidas)', { removidas })
+          .execute();
+
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(OperacaoOmeCompartilhada)
+          .where('operacao_id = :id', { id })
+          .andWhere('ome_id IN (:...removidas)', { removidas })
+          .execute();
+      }
+
+      if (novas.length) {
+        await manager.insert(
+          OperacaoOmeCompartilhada,
+          novas.map((omeId) => ({ operacao: { id }, ome: { id: omeId } })),
+        );
+      }
+    });
+
+    return this.getCompartilhamento(id);
   }
 }

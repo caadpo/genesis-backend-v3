@@ -16,6 +16,8 @@ import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/guards/roles.guard';
 import { Roles } from 'src/decorators/roles.decorator';
 import { UserType } from 'src/user/enum/user-type.enum';
+import { BadRequestException } from '@nestjs/common';
+import { StatusRepasse } from './entities/repasse.entity';
 
 const TODOS_TIPOS = [
   UserType.MASTER,
@@ -61,8 +63,8 @@ export class RepasseController {
 
   @Get()
   @Roles(...TODOS_TIPOS)
-  findAll() {
-    return this.service.findAll();
+  findAll(@Request() req: any) {
+    return this.service.findAll(req.user);
   }
 
   @Get('disponiveis')
@@ -73,8 +75,22 @@ export class RepasseController {
 
   @Get('meus')
   @Roles(...TODOS_TIPOS)
-  findMeus(@Request() req: any) {
-    return this.service.findMeusRepasses(req.user);
+  findMeus(@Request() req: any, @Query('status') status?: string) {
+    let statusFiltro: StatusRepasse | undefined;
+
+    if (status) {
+      const valido = Object.values(StatusRepasse).includes(
+        status as StatusRepasse,
+      );
+      if (!valido) {
+        throw new BadRequestException(
+          'status inválido. Use ABERTO, ACEITO ou CANCELADO',
+        );
+      }
+      statusFiltro = status as StatusRepasse;
+    }
+
+    return this.service.findMeusRepasses(req.user, statusFiltro);
   }
 
   @Get('buscar-usuario')

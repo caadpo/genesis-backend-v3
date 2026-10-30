@@ -1,4 +1,10 @@
-import { IsInt, IsString } from 'class-validator';
+import {
+  ArrayUnique,
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class CreateOperacaoDto {
   @IsInt()
@@ -15,4 +21,11 @@ export class CreateOperacaoDto {
 
   @IsInt()
   qtd_pracas_oper!: number;
+
+  /** OMEs que poderão preencher vagas desta operação (opcional). */
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsInt({ each: true })
+  omesCompartilhadas?: number[];
 }

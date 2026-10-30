@@ -13,6 +13,7 @@ import { UserEntity } from 'src/user/entities/user.entity';
 import { ContaEntity } from 'src/conta/entities/conta.entity';
 import { Sistema } from 'src/tetos/entities/teto.entity';
 import { ViaturaEntity } from 'src/viatura/entities/viatura.entity';
+import { OmeEntity } from 'src/ome/entities/ome.entity';
 
 // ✅ Unicidade: mesma matrícula, mesma data, mesmo sistema → BLOQUEADO
 @Index(['mat_escala', 'dataInicio', 'sistema'], { unique: true })
@@ -28,43 +29,43 @@ export class EscalaEntity {
   @JoinColumn({ name: 'operacao_id' })
   operacao!: Operacao;
 
-  @ManyToOne(() => UserEntity, { nullable: false })
+  @ManyToOne(() => UserEntity, { nullable: true })
   @JoinColumn({ name: 'usuario_id' })
-  usuario!: UserEntity;
+  usuario?: UserEntity | null;
 
   /* Campos vindos da tabel dadosSGP */
 
-  @Column({ type: 'varchar', name: 'pg_escala' })
-  pg_escala!: string;
+  @Column({ type: 'varchar', name: 'pg_escala', nullable: true })
+  pg_escala!: string | null;
 
-  @Column({ type: 'varchar', name: 'mat_escala' })
-  mat_escala!: string;
+  @Column({ type: 'varchar', name: 'mat_escala', nullable: true })
+  mat_escala!: string | null;
 
-  @Column({ type: 'varchar', name: 'ng_escala' })
-  ng_escala!: string; //Nome de Guerra
+  @Column({ type: 'varchar', name: 'ng_escala', nullable: true })
+  ng_escala!: string | null; //Nome de Guerra
 
   @Column({ type: 'varchar', name: 'tipo_escala' })
   tipo_escala!: string;
 
-  @Column({ type: 'varchar', name: 'cpf_escala' })
-  cpf_escala!: string;
+  @Column({ type: 'varchar', name: 'cpf_escala', nullable: true })
+  cpf_escala!: string | null;
 
-  @Column({ type: 'varchar', name: 'nomecompleto_escala' })
-  nomecompleto_escala!: string;
+  @Column({ type: 'varchar', name: 'nomecompleto_escala', nullable: true })
+  nomecompleto_escala!: string | null;
 
   @Column({ type: 'varchar', name: 'nomeome_escala' })
   nomeome_escala!: string;
 
-  @Column({ type: 'varchar', name: 'nunfunc_escala' })
-  nunfunc_escala!: string;
+  @Column({ type: 'varchar', name: 'nunfunc_escala', nullable: true })
+  nunfunc_escala!: string | null;
 
-  @Column({ type: 'varchar', name: 'nunvinc_escala' })
-  nunvinc_escala!: string;
+  @Column({ type: 'varchar', name: 'nunvinc_escala', nullable: true })
+  nunvinc_escala!: string | null;
 
   // Conta relacionada
   @ManyToOne(() => ContaEntity, { nullable: true })
   @JoinColumn({ name: 'conta_id' })
-  conta?: ContaEntity;
+  conta?: ContaEntity | null;
 
   @Column({ type: 'date', name: 'data_inicio' })
   dataInicio!: string;
@@ -193,6 +194,22 @@ export class EscalaEntity {
 
   @Column({ type: 'text', name: 'obs_verificador2', nullable: true })
   obsVerificador2?: string | null;
+
+  @Column({ type: 'boolean', default: false, name: 'is_vaga_aberta' })
+  isVagaAberta!: boolean;
+
+  @Column({ type: 'integer', name: 'ome_destino_id', nullable: true })
+  omeDestinoId?: number | null;
+
+  @ManyToOne(() => OmeEntity, { nullable: true, eager: false })
+  @JoinColumn({ name: 'ome_destino_id' })
+  omeDestino?: OmeEntity | null;
+
+  @Column({ type: 'integer', name: 'preenchida_por_id', nullable: true })
+  preenchidaPorId?: number | null;
+
+  @Column({ type: 'timestamp', name: 'preenchida_em', nullable: true })
+  preenchidaEm?: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;

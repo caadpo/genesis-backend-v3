@@ -6,7 +6,14 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Cron, CronExpression } from '@nestjs/schedule'; // ⬅️ requer @nestjs/schedule + ScheduleModule.forRoot() no AppModule
+import { Cron, CronExpression } from '@nestjs/schedule';
+
+import { OperacaoOmeCompartilhada } from 'src/operacao/entities/operacao-ome-compartilhada.entity';
+import {
+  CreateVagaDto,
+  PreencherVagaDto,
+  SubstituirUsuarioDto,
+} from './dtos/vaga.dtos';
 
 import { EscalaEntity } from './entities/escala.entity';
 import { CreateEscalaDto } from './dtos/create-escala.dto';
@@ -33,6 +40,8 @@ import { promisify } from 'util';
 import { tmpdir } from 'os';
 import { PagamentoEntity } from 'src/pagamento/entities/pagamento.entity';
 import { ConfirmarPresencaDto } from './dtos/confirmar-presenca.dto';
+import { ReturnColegaDto } from './dtos/return-colega.dto';
+import { ReturnMinhaEscalaDto } from './dtos/return-minha-escala.dto';
 
 const execFileAsync = promisify(execFile);
 
@@ -64,6 +73,9 @@ export class EscalaService {
 
     @InjectRepository(PagamentoEntity)
     private readonly pagamentoRepo: Repository<PagamentoEntity>,
+
+    @InjectRepository(OperacaoOmeCompartilhada)
+    private readonly compRepo: Repository<OperacaoOmeCompartilhada>,
   ) {}
 
   private readonly FUNCOES_COM_VIATURA = ['CMT', 'MOT', 'FISCAL', 'PAT'];
@@ -146,19 +158,29 @@ export class EscalaService {
       );
     }
 
-    const [viatura, operacao] = await Promise.all([
+    const [viatura, operacao, compartilhadas] = await Promise.all([
       this.viaturaRepo.findOne({ where: { id: viaturaId } }),
       this.operacaoRepo.findOne({
         where: { id: operacaoId },
         relations: { evento: { ome: true } },
       }),
+      this.compRepo.find({
+        where: { operacao: { id: operacaoId } },
+        relations: { ome: true },
+      }),
     ]);
 
     if (!viatura) throw new NotFoundException('Viatura não encontrada');
 
-    const omeDoEvento = operacao?.evento?.ome?.id;
-    if (viatura.omeId !== omeDoEvento) {
-      throw new ForbiddenException('A viatura não pertence à OME do evento');
+    const omesPermitidas = [
+      operacao?.evento?.ome?.id,
+      ...compartilhadas.map((c) => c.ome.id),
+    ].filter((x): x is number => x != null);
+
+    if (!omesPermitidas.includes(viatura.omeId)) {
+      throw new ForbiddenException(
+        'A viatura não pertence à OME do evento nem a uma OME participante',
+      );
     }
   }
 
@@ -440,68 +462,109 @@ export class EscalaService {
 
   // ── Find minhas escalas ─────────────────────────────────────────────────────
 
-  async findMinhasEscalas(usuarioLogado: {
-    id: number;
-    mat: string;
-  }): Promise<ReturnEscalaDto[]> {
-    const escalas = await this.repo
+  // ── Find minhas escalas (agora com filtro opcional por mês) ─────────────────
+
+  async findMinhasEscalas(
+    usuarioLogado: { id: number; mat: string },
+    mes?: number,
+    ano?: number,
+  ): Promise<ReturnMinhaEscalaDto[]> {
+    const qb = this.repo
       .createQueryBuilder('e')
-      .leftJoinAndSelect('e.viatura', 'viatura')
-      .leftJoinAndSelect('e.operacao', 'operacao')
-      .leftJoinAndSelect('operacao.evento', 'evento')
-      .leftJoinAndSelect('evento.distribuicao', 'distribuicao')
-      .leftJoinAndSelect('distribuicao.teto', 'teto')
-      .leftJoinAndSelect('evento.ome', 'ome')
-      .leftJoinAndSelect('e.conta', 'conta')
-      .leftJoinAndSelect('e.usuario', 'usuario')
-      .leftJoinAndSelect('e.presencaConfirmadaPor', 'confirmador')
-      .leftJoinAndSelect('e.saidaConfirmadaPor', 'saidaPor')
-      .leftJoinAndSelect('e.verificador1', 'verificador1')
-      .leftJoinAndSelect('e.verificador2', 'verificador2')
-      .where('e.usuario_id = :usuarioId', { usuarioId: usuarioLogado.id })
+      // Só as colunas que a tela usa (sem cpf, nome completo, conta etc.)
+      .select([
+        'e.id',
+        'e.sistema',
+        'e.tipo_escala',
+        'e.dataInicio',
+        'e.horaInicio',
+        'e.horaFim',
+        'e.cota_escala',
+        'e.localApresentacao',
+        'e.funcao',
+        'e.situacao',
+        'e.anotacoes',
+        'e.presencaConfirmada',
+        'e.presencaConfirmadaEm',
+        'e.presencaLatitude',
+        'e.presencaLongitude',
+        'e.saidaConfirmada',
+        'e.saidaConfirmadaEm',
+        'e.saidaConfirmadaPorId',
+        'e.primeiraVerificacao',
+        'e.dataHoraVerificador1',
+        'e.obsVerificador1',
+        'e.segundaVerificacao',
+        'e.dataHoraVerificador2',
+        'e.obsVerificador2',
+      ])
+      .leftJoin('e.operacao', 'operacao')
+      .leftJoin('operacao.evento', 'evento')
+      .leftJoin('evento.ome', 'ome')
+      .leftJoin('evento.distribuicao', 'distribuicao')
+      .leftJoin('distribuicao.teto', 'teto')
+      // verificadores: só id e matrícula (para resolver "PG MAT NOME")
+      .leftJoin('e.verificador1', 'verificador1')
+      .leftJoin('e.verificador2', 'verificador2')
+      .addSelect([
+        'operacao.id',
+        'operacao.nome_operacao',
+        'operacao.cod_op',
+        'evento.id',
+        'evento.nome_evento',
+        'evento.status_evento',
+        'evento.updated_at',
+        'ome.id',
+        'ome.nomeOme',
+        'distribuicao.id',
+        'teto.id',
+        'teto.status',
+        'verificador1.id',
+        'verificador1.mat',
+        'verificador2.id',
+        'verificador2.mat',
+      ])
+      .where('e.usuario_id = :usuarioId', { usuarioId: usuarioLogado.id });
+
+    // Intervalo [inicio, fim): usa índice (sem EXTRACT na coluna)
+    if (mes && ano) {
+      const inicio = `${ano}-${String(mes).padStart(2, '0')}-01`;
+      const proxMes = mes === 12 ? 1 : mes + 1;
+      const proxAno = mes === 12 ? ano + 1 : ano;
+      const fim = `${proxAno}-${String(proxMes).padStart(2, '0')}-01`;
+
+      qb.andWhere('e.data_inicio >= :inicio AND e.data_inicio < :fim', {
+        inicio,
+        fim,
+      });
+    }
+
+    const escalas = await qb
       .orderBy('e.data_inicio', 'ASC')
       .addOrderBy('e.hora_inicio', 'ASC')
       .getMany();
 
-    const agrupadoPorTeto = new Map<number | null, EscalaEntity[]>();
-    for (const escala of escalas) {
-      const idTeto = escala?.operacao?.evento?.distribuicao?.teto?.id ?? null;
-      if (!agrupadoPorTeto.has(idTeto)) agrupadoPorTeto.set(idTeto, []);
-      agrupadoPorTeto.get(idTeto)!.push(escala);
-    }
+    if (escalas.length === 0) return [];
 
-    const somasPorTeto = new Map<number | null, number>();
-    for (const [idTeto, escalasTeto] of agrupadoPorTeto.entries()) {
-      const soma = escalasTeto.reduce(
-        (acc, e) => acc + (e.cota_escala || 0),
-        0,
-      );
-      somasPorTeto.set(idTeto, soma);
-    }
+    const eventoIds = [
+      ...new Set(
+        escalas
+          .map((e) => e.operacao?.evento?.id)
+          .filter((id): id is number => id != null),
+      ),
+    ];
 
-    const valorFinalPorTetoSistema = new Map<string, number>();
-    for (const [idTeto, escalasTeto] of agrupadoPorTeto.entries()) {
-      const acumuladoPorSistema = new Map<string, number>();
-      for (const e of escalasTeto) {
-        const chave = `${idTeto}|${e.sistema}`;
-        const valor =
-          (e.cota_escala || 0) *
-          this.valorMultiplicador(e.sistema, e.tipo_escala);
-        acumuladoPorSistema.set(
-          chave,
-          (acumuladoPorSistema.get(chave) ?? 0) + valor,
-        );
-      }
-      for (const [chave, valor] of acumuladoPorSistema.entries()) {
-        valorFinalPorTetoSistema.set(chave, valor);
-      }
-    }
-
-    const sgpMap = await this.construirMapaNomes(escalas);
-
-    const pagamentosUsuario = await this.pagamentoRepo.find({
-      where: { usuarioId: usuarioLogado.id },
-    });
+    // Independentes → em paralelo. O mapa de nomes só consulta o SGP se
+    // existir algum verificador nas escalas do mês.
+    const [sgpMap, pagamentosUsuario] = await Promise.all([
+      this.construirMapaNomes(escalas),
+      eventoIds.length
+        ? this.pagamentoRepo.find({
+            where: { usuarioId: usuarioLogado.id, eventoId: In(eventoIds) },
+            select: { eventoId: true, comentario_pagamento: true },
+          })
+        : Promise.resolve([] as PagamentoEntity[]),
+    ]);
 
     const comentarioPorEvento = new Map<number, string | null>();
     for (const pg of pagamentosUsuario) {
@@ -509,41 +572,223 @@ export class EscalaService {
     }
 
     return escalas.map((e) => {
-      const idTeto = e?.operacao?.evento?.distribuicao?.teto?.id ?? null;
-      const somacota_escala = somasPorTeto.get(idTeto) || 0;
-      const eventoId = e?.operacao?.evento?.id ?? null;
+      const evento = e.operacao?.evento;
 
-      const valorIndividual =
-        (e.cota_escala || 0) *
-        this.valorMultiplicador(e.sistema, e.tipo_escala);
-
-      const somaCotaFinal =
-        valorFinalPorTetoSistema.get(`${idTeto}|${e.sistema}`) ?? 0;
-
-      let pagamento: string | null = null;
+      let pagamento = '';
       if (e.sistema === 'PJES') {
-        const statusTeto = e?.operacao?.evento?.distribuicao?.teto?.status;
+        const statusTeto = evento?.distribuicao?.teto?.status;
         if (statusTeto === 'ABERTO') pagamento = 'Pendente';
         else if (statusTeto === 'ENCERRADO') pagamento = 'Pago';
-      } else if (e.sistema === 'DIARIAS') {
-        const statusEvento = e?.operacao?.evento?.status_evento;
-        const dataStatus = e?.operacao?.evento?.updated_at;
-        pagamento = statusEvento
-          ? `${statusEvento}${dataStatus ? ' - ' + new Date(dataStatus).toLocaleString('pt-BR') : ''}`
-          : null;
+      } else if (e.sistema === 'DIARIAS' && evento?.status_evento) {
+        pagamento = `${evento.status_evento}${
+          evento.updated_at
+            ? ' - ' + new Date(evento.updated_at).toLocaleString('pt-BR')
+            : ''
+        }`;
       }
 
-      return {
-        ...new ReturnEscalaDto(e, this.resolverNomes(e, sgpMap)),
-        somacota_escala,
-        somaCotaFinal,
-        valorIndividual,
+      return new ReturnMinhaEscalaDto(e, this.resolverNomes(e, sgpMap), {
+        valorIndividual:
+          (e.cota_escala || 0) *
+          this.valorMultiplicador(e.sistema, e.tipo_escala),
         pagamento,
-        comentario_pagamento: eventoId
-          ? (comentarioPorEvento.get(eventoId) ?? null)
+        comentario_pagamento: evento?.id
+          ? (comentarioPorEvento.get(evento.id) ?? null)
           : null,
-      };
+      });
     });
+  }
+
+  // ── Colegas do mesmo serviço (consulta enxuta, filtrada no SQL) ──────────────
+
+  async findColegas(
+    escalaId: number,
+    usuarioLogado: { id: number },
+  ): Promise<ReturnColegaDto[]> {
+    // 1) Carrega só o mínimo da escala "âncora"
+    const minha = await this.repo.findOne({
+      where: { id: escalaId },
+      relations: { usuario: true, operacao: true },
+      select: {
+        id: true,
+        dataInicio: true,
+        horaInicio: true,
+        horaFim: true,
+        viaturaId: true,
+        mat_escala: true,
+        usuario: { id: true },
+        operacao: { id: true },
+      },
+    });
+
+    if (!minha) throw new NotFoundException('Escala não encontrada');
+
+    // Só o próprio escalado enxerga os colegas dessa escala
+    if (minha.usuario?.id !== usuarioLogado.id) {
+      throw new ForbiddenException('Você só pode consultar as suas escalas');
+    }
+
+    if (!minha.operacao?.id || !minha.mat_escala) return [];
+
+    // 2) Filtro inteiro no banco: sem joins, só colunas necessárias
+    const qb = this.repo
+      .createQueryBuilder('e')
+      .leftJoin('e.usuario', 'u') // só para trazer o telefone
+      .select([
+        'e.id',
+        'e.pg_escala',
+        'e.mat_escala',
+        'e.ng_escala',
+        'e.tipo_escala',
+        'e.funcao',
+        'e.viaturaId',
+        'u.id',
+        'u.phone',
+      ])
+      .where('e.operacao_id = :operacaoId', { operacaoId: minha.operacao.id })
+      .andWhere('e.dataInicio = :dataInicio', { dataInicio: minha.dataInicio })
+      .andWhere('e.horaInicio = :horaInicio', { horaInicio: minha.horaInicio })
+      .andWhere('e.horaFim = :horaFim', { horaFim: minha.horaFim })
+      .andWhere('e.mat_escala IS NOT NULL')
+      .andWhere('e.mat_escala != :mat', { mat: minha.mat_escala })
+      .andWhere('e.isVagaAberta = false');
+
+    // Mesmo comportamento anterior: se eu tenho viatura, só quem está na mesma
+    if (minha.viaturaId) {
+      qb.andWhere('e.viaturaId = :viaturaId', { viaturaId: minha.viaturaId });
+    }
+
+    const colegas = await qb
+      .orderBy('e.funcao', 'ASC')
+      .addOrderBy('e.ng_escala', 'ASC')
+      .limit(50)
+      .getMany();
+
+    return colegas.map((c) => new ReturnColegaDto(c));
+  }
+
+  // ── Home: próximas escalas com membros do serviço ───────────────────────────
+
+  async findProximas(usuarioLogado: { id: number }, hoje?: string, limite = 2) {
+    const dataCorte =
+      hoje ??
+      (() => {
+        const d = new Date();
+        const p = (n: number) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+      })();
+
+    const [total, escalas] = await Promise.all([
+      this.repo
+        .createQueryBuilder('e')
+        .where('e.usuario_id = :id', { id: usuarioLogado.id })
+        .andWhere('e.data_inicio >= :dataCorte', { dataCorte })
+        .getCount(),
+
+      this.repo
+        .createQueryBuilder('e')
+        .leftJoin('e.viatura', 'viatura')
+        .leftJoin('e.operacao', 'operacao')
+        .leftJoin('operacao.evento', 'evento')
+        .leftJoin('evento.ome', 'ome')
+        .select([
+          'e.id',
+          'e.sistema',
+          'e.dataInicio',
+          'e.horaInicio',
+          'e.horaFim',
+          'e.localApresentacao',
+          'e.funcao',
+          'e.viaturaId',
+        ])
+        .addSelect([
+          'viatura.id',
+          'viatura.patrimonio',
+          'operacao.id',
+          'evento.id',
+          'evento.nome_evento',
+          'ome.id',
+          'ome.nomeOme',
+        ])
+        .where('e.usuario_id = :id', { id: usuarioLogado.id })
+        .andWhere('e.data_inicio >= :dataCorte', { dataCorte })
+        .orderBy('e.data_inicio', 'ASC')
+        .addOrderBy('e.hora_inicio', 'ASC')
+        .limit(limite) // só joins to-one, então limit é seguro
+        .getMany(),
+    ]);
+
+    if (escalas.length === 0) return { total, escalas: [] };
+
+    // Todos os membros dos serviços acima, em UMA query
+    const operacaoIds = [
+      ...new Set(
+        escalas.map((e) => e.operacao?.id).filter((id): id is number => !!id),
+      ),
+    ];
+    const datas = [...new Set(escalas.map((e) => e.dataInicio))];
+
+    const candidatos = operacaoIds.length
+      ? await this.repo
+          .createQueryBuilder('e')
+          .leftJoin('e.operacao', 'operacao')
+          .select([
+            'e.id',
+            'e.mat_escala',
+            'e.ng_escala',
+            'e.dataInicio',
+            'e.horaInicio',
+            'e.horaFim',
+            'e.viaturaId',
+          ])
+          .addSelect('operacao.id')
+          .where('e.operacao_id IN (:...operacaoIds)', { operacaoIds })
+          .andWhere('e.data_inicio IN (:...datas)', { datas })
+          .andWhere('e.is_vaga_aberta = false')
+          .andWhere('e.mat_escala IS NOT NULL')
+          .getMany()
+      : [];
+
+    const chave = (
+      operacaoId: number | undefined,
+      e: {
+        dataInicio: string;
+        horaInicio: string;
+        horaFim: string;
+        viaturaId?: number | null;
+      },
+    ) =>
+      `${operacaoId}|${e.dataInicio}|${e.horaInicio}|${e.horaFim}|${e.viaturaId ?? ''}`;
+
+    const gruposMembros = new Map<string, typeof candidatos>();
+    for (const c of candidatos) {
+      const k = chave(c.operacao?.id, c);
+      if (!gruposMembros.has(k)) gruposMembros.set(k, []);
+      gruposMembros.get(k)!.push(c);
+    }
+
+    return {
+      total,
+      escalas: escalas.map((e) => ({
+        id: e.id,
+        sistema: e.sistema,
+        dataInicio: e.dataInicio,
+        horaInicio: e.horaInicio,
+        horaFim: e.horaFim,
+        localApresentacao: e.localApresentacao,
+        funcao: e.funcao,
+        nomeEvento: e.operacao?.evento?.nome_evento ?? null,
+        nomeOme: e.operacao?.evento?.ome?.nomeOme ?? null,
+        viatura: e.viatura ? { patrimonio: e.viatura.patrimonio } : null,
+        membros: (gruposMembros.get(chave(e.operacao?.id, e)) ?? []).map(
+          (m) => ({
+            id: m.id,
+            mat_escala: m.mat_escala,
+            ng_escala: m.ng_escala,
+          }),
+        ),
+      })),
+    };
   }
 
   async findEscalasByUsuario(
@@ -693,6 +938,19 @@ export class EscalaService {
     });
     if (!escala) throw new NotFoundException('Escala não encontrada');
 
+    const ehVaga = escala.isVagaAberta;
+
+    if (ehVaga && dto.usuarioId !== undefined) {
+      throw new BadRequestException(
+        'Para preencher uma vaga em aberto use o endpoint de preenchimento',
+      );
+    }
+    if (ehVaga && dto.viaturaId) {
+      throw new BadRequestException(
+        'Vaga em aberto não aceita viatura; ela é definida ao preencher',
+      );
+    }
+
     const operacaoId = dto.operacaoId ?? escala.operacao.id;
     const funcaoFinal = dto.funcao ?? escala.funcao;
 
@@ -706,7 +964,7 @@ export class EscalaService {
     if (novoUsuario) {
       const { usuario, sgp } = novoUsuario;
       escala.usuario = { id: dto.usuarioId } as UserEntity;
-      escala.conta = usuario.conta ?? undefined;
+      escala.conta = usuario.conta ?? null;
       escala.nomeome_escala = usuario.ome?.nomeOme ?? escala.nomeome_escala;
       escala.pg_escala = sgp.pgSgp;
       escala.mat_escala = sgp.matSgp;
@@ -731,16 +989,29 @@ export class EscalaService {
     );
 
     await Promise.all([
-      this.verificarConflito(novaMatEscala, novaData, novaSistema, id),
+      novaMatEscala
+        ? this.verificarConflito(novaMatEscala, novaData, novaSistema, id)
+        : Promise.resolve(),
       this.verificarTeto(operacaoId, novaTipo, novaCota, id),
-      this.verificarLimiteCotasUsuario(
-        novaMatEscala,
-        novaSistema,
-        operacaoId,
-        novaCota,
-        id,
-      ),
+      novaMatEscala
+        ? this.verificarLimiteCotasUsuario(
+            novaMatEscala,
+            novaSistema,
+            operacaoId,
+            novaCota,
+            id,
+          )
+        : Promise.resolve(),
     ]);
+
+    // Detecta mudanças que invalidam um repasse ABERTO desta escala
+    const trocouMilitar = !!novoUsuario;
+    const mudouServico =
+      (dto.dataInicio && dto.dataInicio !== escala.dataInicio) ||
+      (dto.horaInicio && dto.horaInicio !== escala.horaInicio) ||
+      (dto.horaFim && dto.horaFim !== escala.horaFim) ||
+      (dto.sistema && dto.sistema !== escala.sistema);
+    const invalidaRepasse = trocouMilitar || !!mudouServico;
 
     Object.assign(escala, {
       ...(dto.sistema && { sistema: dto.sistema }),
@@ -781,7 +1052,18 @@ export class EscalaService {
     });
 
     try {
-      await this.repo.save(escala);
+      await this.dataSource.transaction(async (manager) => {
+        await manager.save(escala);
+
+        if (invalidaRepasse) {
+          // O repasse ABERTO era do militar anterior / do serviço antigo
+          await manager.query(
+            `UPDATE "repasse" SET "status_repasse" = 'CANCELADO', "updated_at" = NOW()
+             WHERE "escala_id" = $1 AND "status_repasse" = 'ABERTO'`,
+            [id],
+          );
+        }
+      });
     } catch (error: unknown) {
       const dbError = error as { driverError?: { code?: string } };
       if (dbError?.driverError?.code === '23505') {
@@ -797,12 +1079,16 @@ export class EscalaService {
 
   // ── Find by operacao ────────────────────────────────────────────────────────
 
-  async findByOperacao(operacaoId: number): Promise<ReturnEscalaOperacaoDto> {
-    const escalas = await this.repo
+  async findByOperacao(
+    operacaoId: number,
+    incluirVagas = true,
+  ): Promise<ReturnEscalaOperacaoDto> {
+    const qb = this.repo
       .createQueryBuilder('e')
       .leftJoinAndSelect('e.viatura', 'viatura')
       .leftJoinAndSelect('e.usuario', 'usuario')
       .leftJoinAndSelect('e.conta', 'conta')
+      .leftJoinAndSelect('e.omeDestino', 'omeDestino')
       .leftJoinAndSelect('e.operacao', 'operacao')
       .leftJoinAndSelect('operacao.evento', 'evento')
       .leftJoinAndSelect('e.presencaConfirmadaPor', 'confirmador')
@@ -824,8 +1110,11 @@ export class EscalaService {
       ELSE               7
     END
     `,
-      )
-      .getMany();
+      );
+
+    if (!incluirVagas) qb.andWhere('e.is_vaga_aberta = false');
+
+    const escalas = await qb.getMany();
 
     const sgpMap = await this.construirMapaNomes(escalas);
 
@@ -857,7 +1146,9 @@ export class EscalaService {
       .leftJoinAndSelect('e.saidaConfirmadaPor', 'saidaPor')
       .leftJoinAndSelect('e.verificador1', 'verificador1')
       .leftJoinAndSelect('e.verificador2', 'verificador2')
+      .leftJoinAndSelect('e.omeDestino', 'omeDestino')
       .where('operacao.cod_op = :codOp', { codOp })
+      .andWhere('e.is_vaga_aberta = false')
       .orderBy('e.data_inicio', 'ASC')
       .addOrderBy('e.hora_inicio', 'ASC')
       .addOrderBy(
@@ -905,7 +1196,7 @@ export class EscalaService {
     matUsuario: string,
   ): Promise<{ buffer: Buffer; cod_op: string }> {
     const [dto, operacao] = await Promise.all([
-      this.findByOperacao(operacaoId),
+      this.findByOperacao(operacaoId, false),
       this.operacaoRepo.findOneBy({ id: operacaoId }),
     ]);
 
@@ -959,6 +1250,12 @@ export class EscalaService {
 
     if (!escala) throw new NotFoundException('Escala não encontrada');
 
+    if (!escala.usuario) {
+      throw new BadRequestException(
+        'Esta escala é uma vaga em aberto e ainda não foi preenchida',
+      );
+    }
+
     if (escala.usuario.id !== usuarioLogado.id) {
       throw new ForbiddenException('Você só pode confirmar a própria presença');
     }
@@ -1010,6 +1307,12 @@ export class EscalaService {
     });
 
     if (!escala) throw new NotFoundException('Escala não encontrada');
+
+    if (!escala.usuario) {
+      throw new BadRequestException(
+        'Esta escala é uma vaga em aberto e ainda não foi preenchida',
+      );
+    }
 
     if (escala.usuario.id !== usuarioLogado.id) {
       throw new ForbiddenException('Você só pode confirmar a própria saída');
@@ -1078,6 +1381,12 @@ export class EscalaService {
 
     if (!escala) throw new NotFoundException('Escala não encontrada');
 
+    if (escala.isVagaAberta) {
+      throw new BadRequestException(
+        'Não é possível registrar verificação em uma vaga em aberto',
+      );
+    }
+
     if (dados.verificado === undefined && dados.observacao === undefined) {
       throw new BadRequestException(
         'Informe ao menos "verificado" ou "observacao"',
@@ -1138,6 +1447,7 @@ export class EscalaService {
       .leftJoinAndSelect('e.saidaConfirmadaPor', 'saidaPor')
       .leftJoinAndSelect('e.verificador1', 'verificador1')
       .leftJoinAndSelect('e.verificador2', 'verificador2')
+      .leftJoinAndSelect('e.omeDestino', 'omeDestino')
       .where('e.id = :id', { id })
       .getOne();
 
@@ -1266,6 +1576,375 @@ export class EscalaService {
     ]);
 
     await this.repo.delete(id);
+  }
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // Vagas em aberto (operação compartilhada)
+  // ═════════════════════════════════════════════════════════════════════════
+
+  /**
+   * DONO         = OME do evento (mesma regra de verificarPermissaoOme) ou MASTER/TECNICO
+   * PARTICIPANTE = OME presente em operacao_ome_compartilhada
+   */
+  private async papelNaOperacao(
+    operacaoId: number,
+    user: { typeUser: number; omeId: number },
+  ): Promise<'DONO' | 'PARTICIPANTE' | 'NENHUM'> {
+    const tipo = Number(user.typeUser);
+    if (tipo === UserType.MASTER || tipo === UserType.TECNICO) return 'DONO';
+
+    const operacao = await this.operacaoRepo.findOne({
+      where: { id: operacaoId },
+      relations: { evento: { ome: true } },
+    });
+    if (!operacao) throw new NotFoundException('Operação não encontrada');
+
+    if (Number(operacao.evento?.ome?.id) === Number(user.omeId)) return 'DONO';
+
+    const participa = await this.compRepo.exists({
+      where: { operacao: { id: operacaoId }, ome: { id: user.omeId } },
+    });
+    return participa ? 'PARTICIPANTE' : 'NENHUM';
+  }
+
+  /** Copia o "snapshot" do usuário/SGP para a escala (usado ao preencher/substituir). */
+  private copiarDadosDoUsuario(
+    escala: EscalaEntity,
+    usuario: UserEntity,
+    sgp: DadosSgpEntity,
+  ): void {
+    escala.usuario = { id: usuario.id } as UserEntity;
+    escala.conta = usuario.conta ?? null; // null: não herdar a conta da pessoa anterior
+    escala.pg_escala = sgp.pgSgp;
+    escala.mat_escala = sgp.matSgp;
+    escala.ng_escala = sgp.nomeGuerraSgp;
+    escala.cpf_escala = sgp.cpfSgp;
+    escala.nomecompleto_escala = sgp.nomeCompletoSgp;
+    escala.nomeome_escala = usuario.ome?.nomeOme ?? '';
+    escala.nunfunc_escala = sgp.nunfuncSgp;
+    escala.nunvinc_escala = sgp.nunvincSgp;
+    // tipo_escala NÃO muda: o usuário precisa ter o mesmo tipo (validado antes)
+  }
+
+  private validarTipoDoUsuario(escala: EscalaEntity, sgp: DadosSgpEntity) {
+    if (sgp.tipoSgp !== escala.tipo_escala) {
+      const esperado = escala.tipo_escala === 'O' ? 'Oficial' : 'Praça';
+      throw new BadRequestException(
+        `Esta escala é de ${esperado}. O militar informado não é do mesmo tipo.`,
+      );
+    }
+  }
+
+  private tratarErroUnique(
+    error: unknown,
+    mat: string,
+    data: string,
+    sistema: string,
+  ) {
+    const dbError = error as { driverError?: { code?: string } };
+    if (dbError?.driverError?.code === '23505') {
+      throw new BadRequestException(
+        `Matrícula ${mat} já está escalada em ${data} para ${sistema}`,
+      );
+    }
+    throw error;
+  }
+
+  // ── Criar vaga (somente OME dona) ───────────────────────────────────────────
+
+  async criarVaga(
+    dto: CreateVagaDto,
+    usuarioLogado: { id: number; typeUser: number; omeId: number },
+  ): Promise<ReturnEscalaDto> {
+    // Auxiliar só na própria OME (dono); participante cai aqui em 403.
+    await this.verificarPermissaoOme(dto.operacaoId, usuarioLogado);
+    await this.verificarStatusEvento(dto.operacaoId);
+
+    const compartilhada = await this.compRepo.exists({
+      where: {
+        operacao: { id: dto.operacaoId },
+        ome: { id: dto.omeDestinoId },
+      },
+    });
+    if (!compartilhada) {
+      throw new BadRequestException(
+        'A OME de destino não está no compartilhamento desta operação',
+      );
+    }
+
+    // A vaga CONSOME cota na criação (reserva o espaço no teto da operação).
+    const cota = this.calcularCota(dto.horaInicio, dto.horaFim, dto.sistema);
+    await this.verificarTeto(dto.operacaoId, dto.tipoEscala, cota);
+
+    const vaga = this.repo.create({
+      sistema: dto.sistema,
+      operacao: { id: dto.operacaoId },
+      isVagaAberta: true,
+      omeDestinoId: dto.omeDestinoId,
+
+      pg_escala: null,
+      mat_escala: null,
+      ng_escala: null,
+      cpf_escala: null,
+      nomecompleto_escala: null,
+      nunfunc_escala: null,
+      nunvinc_escala: null,
+      tipo_escala: dto.tipoEscala,
+      nomeome_escala: '',
+
+      dataInicio: dto.dataInicio,
+      horaInicio: dto.horaInicio,
+      horaFim: dto.horaFim,
+      cota_escala: cota,
+      localApresentacao: dto.localApresentacao ?? 'SEDE DA OME',
+      funcao: dto.funcao,
+      situacao: dto.situacao ?? 'REGULAR',
+      anotacoes: dto.anotacoes,
+    });
+
+    const saved = await this.repo.save(vaga);
+    return this.findOne(saved.id);
+  }
+
+  // ── Preencher vaga (OME destino ou dona) ────────────────────────────────────
+
+  async preencherVaga(
+    id: number,
+    dto: PreencherVagaDto,
+    usuarioLogado: { id: number; typeUser: number; omeId: number },
+  ): Promise<ReturnEscalaDto> {
+    const escala = await this.repo.findOne({
+      where: { id },
+      relations: { operacao: true },
+    });
+    if (!escala) throw new NotFoundException('Escala não encontrada');
+
+    if (!escala.isVagaAberta) {
+      throw new BadRequestException(
+        'Esta escala não é uma vaga em aberto (ou já foi preenchida)',
+      );
+    }
+
+    const operacaoId = escala.operacao.id;
+
+    const papel = await this.papelNaOperacao(operacaoId, usuarioLogado);
+    const autorizado =
+      papel === 'DONO' ||
+      (papel === 'PARTICIPANTE' &&
+        Number(escala.omeDestinoId) === Number(usuarioLogado.omeId));
+    if (!autorizado) {
+      throw new ForbiddenException('Esta vaga não está destinada à sua OME');
+    }
+
+    await this.verificarStatusEvento(operacaoId);
+
+    const { usuario, sgp } = await this.buscarUsuario(dto.usuarioId);
+
+    if (
+      papel === 'PARTICIPANTE' &&
+      Number(usuario.omeId) !== Number(usuarioLogado.omeId)
+    ) {
+      throw new ForbiddenException(
+        'Você só pode escalar militares da sua própria OME',
+      );
+    }
+
+    this.validarTipoDoUsuario(escala, sgp);
+
+    await this.verificarConflito(sgp.matSgp, escala.dataInicio, escala.sistema);
+    await this.verificarLimiteCotasUsuario(
+      sgp.matSgp,
+      escala.sistema,
+      operacaoId,
+      escala.cota_escala,
+      escala.id,
+    );
+    if (dto.viaturaId) {
+      await this.verificarViatura(dto.viaturaId, escala.funcao, operacaoId);
+    }
+
+    try {
+      await this.dataSource.transaction(async (manager) => {
+        // Trava a linha: se duas pessoas preencherem ao mesmo tempo, só uma passa.
+        const travada = await manager.findOne(EscalaEntity, {
+          where: { id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!travada || !travada.isVagaAberta) {
+          throw new BadRequestException('Esta vaga já foi preenchida');
+        }
+
+        this.copiarDadosDoUsuario(travada, usuario, sgp);
+        travada.isVagaAberta = false;
+        travada.preenchidaPorId = usuarioLogado.id;
+        travada.preenchidaEm = new Date();
+        if (dto.viaturaId) travada.viaturaId = dto.viaturaId;
+
+        await manager.save(travada);
+      });
+    } catch (error: unknown) {
+      this.tratarErroUnique(
+        error,
+        sgp.matSgp,
+        escala.dataInicio,
+        escala.sistema,
+      );
+    }
+
+    return this.findOne(id);
+  }
+
+  /** Zera tudo que pertencia ao militar anterior (presença, saída, verificações, repasse). */
+  private zerarRegistrosDoServico(escala: EscalaEntity): void {
+    Object.assign(escala, {
+      presencaConfirmada: false,
+      presencaConfirmadaEm: null,
+      presencaConfirmadaPorId: null,
+      presencaLatitude: null,
+      presencaLongitude: null,
+
+      saidaConfirmada: false,
+      saidaConfirmadaEm: null,
+      saidaConfirmadaPorId: null,
+
+      primeiraVerificacao: false,
+      idVerificador1: null,
+      dataHoraVerificador1: null,
+      obsVerificador1: null,
+
+      segundaVerificacao: false,
+      idVerificador2: null,
+      dataHoraVerificador2: null,
+      obsVerificador2: null,
+
+      isRepasse: false,
+      repasseOrigemId: null,
+    });
+  }
+
+  // ── Substituir militar (NÃO usa o update genérico; zera o serviço) ──────────
+
+  async substituirUsuario(
+    id: number,
+    dto: SubstituirUsuarioDto,
+    usuarioLogado: { id: number; typeUser: number; omeId: number },
+  ): Promise<ReturnEscalaDto> {
+    const escala = await this.repo.findOne({
+      where: { id },
+      relations: { operacao: true, usuario: true },
+    });
+    if (!escala) throw new NotFoundException('Escala não encontrada');
+
+    if (escala.isVagaAberta) {
+      throw new BadRequestException(
+        'Esta escala é uma vaga em aberto: use o preenchimento',
+      );
+    }
+
+    const operacaoId = escala.operacao.id;
+    const papel = await this.papelNaOperacao(operacaoId, usuarioLogado);
+
+    if (papel === 'NENHUM') {
+      throw new ForbiddenException('Você não participa desta operação');
+    }
+    if (
+      papel === 'PARTICIPANTE' &&
+      Number(escala.omeDestinoId) !== Number(usuarioLogado.omeId)
+    ) {
+      throw new ForbiddenException(
+        'Você só pode alterar registros que pertencem à sua OME',
+      );
+    }
+
+    await this.verificarStatusEvento(operacaoId);
+
+    if (escala.usuario?.id === dto.usuarioId) {
+      throw new BadRequestException('Este militar já está nesta escala');
+    }
+
+    const { usuario, sgp } = await this.buscarUsuario(dto.usuarioId);
+
+    if (
+      papel === 'PARTICIPANTE' &&
+      Number(usuario.omeId) !== Number(usuarioLogado.omeId)
+    ) {
+      throw new ForbiddenException(
+        'Você só pode escalar militares da sua própria OME',
+      );
+    }
+
+    this.validarTipoDoUsuario(escala, sgp);
+
+    await this.verificarConflito(
+      sgp.matSgp,
+      escala.dataInicio,
+      escala.sistema,
+      escala.id,
+    );
+    await this.verificarLimiteCotasUsuario(
+      sgp.matSgp,
+      escala.sistema,
+      operacaoId,
+      escala.cota_escala,
+      escala.id,
+    );
+
+    this.copiarDadosDoUsuario(escala, usuario, sgp);
+    this.zerarRegistrosDoServico(escala);
+
+    try {
+      await this.dataSource.transaction(async (manager) => {
+        await manager.save(escala);
+
+        // Repasse ABERTO feito pelo militar anterior perde o sentido: cancela.
+        await manager.query(
+          `UPDATE "repasse" SET "status_repasse" = 'CANCELADO', "updated_at" = NOW()
+           WHERE "escala_id" = $1 AND "status_repasse" = 'ABERTO'`,
+          [id],
+        );
+      });
+    } catch (error: unknown) {
+      this.tratarErroUnique(
+        error,
+        sgp.matSgp,
+        escala.dataInicio,
+        escala.sistema,
+      );
+    }
+
+    return this.findOne(id);
+  }
+
+  // ── Listar vagas abertas ────────────────────────────────────────────────────
+
+  async listarVagas(
+    usuarioLogado: { id: number; typeUser: number; omeId: number },
+    operacaoId?: number,
+  ): Promise<ReturnEscalaDto[]> {
+    const qb = this.repo
+      .createQueryBuilder('e')
+      .leftJoinAndSelect('e.operacao', 'operacao')
+      .leftJoinAndSelect('operacao.evento', 'evento')
+      .leftJoinAndSelect('evento.ome', 'ome')
+      .leftJoinAndSelect('e.omeDestino', 'omeDestino')
+      .where('e.is_vaga_aberta = true')
+      .andWhere("evento.status_evento = 'CRIADO'")
+      .orderBy('e.data_inicio', 'ASC')
+      .addOrderBy('e.hora_inicio', 'ASC');
+
+    if (operacaoId) qb.andWhere('e.operacao_id = :operacaoId', { operacaoId });
+
+    const tipo = Number(usuarioLogado.typeUser);
+    const ehMasterOuTecnico =
+      tipo === UserType.MASTER || tipo === UserType.TECNICO;
+
+    // Participante só vê as vagas destinadas à sua OME
+    if (!ehMasterOuTecnico) {
+      qb.andWhere('e.ome_destino_id = :omeId', { omeId: usuarioLogado.omeId });
+    }
+
+    const vagas = await qb.getMany();
+    return vagas.map((e) => new ReturnEscalaDto(e, {}));
   }
 
   // ── Upload em massa (somente MASTER) ─────────────────────────────────────────

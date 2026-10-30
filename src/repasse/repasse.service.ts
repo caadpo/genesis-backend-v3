@@ -14,6 +14,7 @@ import { DadosSgpEntity } from 'src/dadossgp/entities/dadossgp.entity';
 import { CreateRepasseDto } from './dtos/create-repasse.dto';
 import { ReturnRepasseDto } from './dtos/return-repasse.dto';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { UserType } from 'src/user/enum/user-type.enum';
 
 @Injectable()
 export class RepasseService {
@@ -152,6 +153,7 @@ export class RepasseService {
       .where('r.status_repasse = :status', { status: StatusRepasse.ABERTO })
       .andWhere('r.tipo_escala_repasse = :tipo', { tipo: tipoEscala })
       .andWhere('r.ofertante_id != :userId', { userId: usuarioLogado.id })
+      .andWhere('escala.mat_escala = r.mat_ofertante')
       .andWhere(
         `(
     r.destinatario_id = :userId
@@ -229,6 +231,10 @@ export class RepasseService {
 
     if (!escala) throw new NotFoundException('Escala não encontrada');
 
+    if (escala.isVagaAberta || !escala.usuario) {
+      throw new BadRequestException('Vaga em aberto não pode ser repassada');
+    }
+
     if (escala.usuario.mat !== usuarioLogado.mat) {
       throw new ForbiddenException(
         'Você só pode repassar escalas que pertencem a você',
@@ -241,6 +247,17 @@ export class RepasseService {
         `Não é possível repassar. O evento está ${statusEvento}`,
       );
     }
+
+    // Repasses abertos desta escala feitos por OUTRO militar (órfãos de uma
+    // troca anterior) não valem mais: cancela antes de validar.
+    await this.repo
+      .createQueryBuilder()
+      .update(RepasseEntity)
+      .set({ statusRepasse: StatusRepasse.CANCELADO })
+      .where('escala_id = :escalaId', { escalaId: dto.escalaId })
+      .andWhere('status_repasse = :status', { status: StatusRepasse.ABERTO })
+      .andWhere('mat_ofertante != :mat', { mat: escala.usuario.mat })
+      .execute();
 
     const jaExiste = await this.repo.exists({
       where: {
@@ -391,11 +408,21 @@ export class RepasseService {
       );
     }
 
+    // O ofertante precisa continuar sendo o escalado deste serviço
+    if (repasse.escala?.mat_escala !== repasse.matOfertante) {
+      await this.repo.update(repasseId, {
+        statusRepasse: StatusRepasse.CANCELADO,
+      });
+      throw new BadRequestException(
+        'Este repasse não está mais disponível: o militar foi retirado da escala',
+      );
+    }
+
     // ─── Mesma OME só é exigida para repasse GERAL (sem destinatário definido) ────
-    if (
-      !repasse.destinatario &&
-      receptor.ome.id !== repasse.escala?.operacao?.evento?.ome?.id
-    ) {
+    const omeDonaDoRegistro =
+      repasse.escala?.omeDestinoId ?? repasse.escala?.operacao?.evento?.ome?.id;
+
+    if (!repasse.destinatario && receptor.ome.id !== omeDonaDoRegistro) {
       throw new ForbiddenException(
         'Você só pode aceitar repasses de eventos da sua OME',
       );
@@ -509,6 +536,7 @@ export class RepasseService {
       .where('r.status_repasse = :status', { status: StatusRepasse.ABERTO })
       .andWhere('r.tipo_escala_repasse = :tipo', { tipo: tipoEscala })
       .andWhere('r.ofertante_id != :userId', { userId: usuarioLogado.id })
+      .andWhere('escala.mat_escala = r.mat_ofertante')
       .andWhere(
         `(
     r.destinatario_id = :userId
@@ -532,26 +560,18 @@ WHERE e.mat_escala = :mat
       .addOrderBy('r.hora_inicio_repasse', 'ASC')
       .getMany();
 
-    const dtos = await Promise.all(
-      repasses.map(async (r) => {
-        const sgpOfertante = await this.dadosSgpRepo
-          .createQueryBuilder('sgp')
-          .select(['sgp.pgSgp', 'sgp.nomeGuerraSgp', 'sgp.situacaoSgp'])
-          .where('sgp.matSgp = :mat', { mat: r.matOfertante })
-          .getOne();
-
-        return new ReturnRepasseDto(r, sgpOfertante, null);
-      }),
-    );
-
-    return dtos;
+    return this.montarDtos(repasses);
   }
 
-  async findMeusRepasses(usuarioLogado: {
-    id: number;
-  }): Promise<ReturnRepasseDto[]> {
+  async findMeusRepasses(
+    usuarioLogado: { id: number },
+    status?: StatusRepasse,
+  ): Promise<ReturnRepasseDto[]> {
     const repasses = await this.repo.find({
-      where: { ofertante: { id: usuarioLogado.id } },
+      where: {
+        ofertante: { id: usuarioLogado.id },
+        ...(status && { statusRepasse: status }),
+      },
       relations: {
         escala: { operacao: { evento: { ome: true } } },
         ofertante: true,
@@ -559,36 +579,17 @@ WHERE e.mat_escala = :mat
         destinatario: true,
       },
       order: { createdAt: 'DESC' },
+      // Sem filtro de status, limita o histórico; com ABERTO a lista já é pequena
+      take: status ? 100 : 200,
     });
 
-    const dtos = await Promise.all(
-      repasses.map(async (r) => {
-        const sgpOfertante = await this.dadosSgpRepo
-          .createQueryBuilder('sgp')
-          .select(['sgp.pgSgp', 'sgp.nomeGuerraSgp', 'sgp.situacaoSgp'])
-          .where('sgp.matSgp = :mat', { mat: r.matOfertante })
-          .getOne();
-
-        let sgpReceptor: any = null;
-        if (r.receptor) {
-          const receptorMat = await this.userRepo.findOne({
-            where: { id: r.receptor.id },
-            select: { mat: true },
-          });
-          if (receptorMat) {
-            sgpReceptor = await this.dadosSgpRepo
-              .createQueryBuilder('sgp')
-              .select(['sgp.pgSgp', 'sgp.nomeGuerraSgp', 'sgp.situacaoSgp'])
-              .where('sgp.matSgp = :mat', { mat: receptorMat.mat })
-              .getOne();
-          }
-        }
-
-        return new ReturnRepasseDto(r, sgpOfertante, sgpReceptor);
-      }),
-    );
-
-    return dtos;
+    const dtos = await this.montarDtos(repasses);
+    // Repasse ABERTO só vale enquanto o ofertante ainda é o escalado
+    return status === StatusRepasse.ABERTO
+      ? dtos.filter(
+          (_, i) => repasses[i].escala?.mat_escala === repasses[i].matOfertante,
+        )
+      : dtos;
   }
 
   async findOne(id: number): Promise<ReturnRepasseDto> {
@@ -603,69 +604,42 @@ WHERE e.mat_escala = :mat
     });
     if (!repasse) throw new NotFoundException('Repasse não encontrado');
 
-    const sgpOfertante = await this.dadosSgpRepo
-      .createQueryBuilder('sgp')
-      .select(['sgp.pgSgp', 'sgp.nomeGuerraSgp', 'sgp.situacaoSgp'])
-      .where('sgp.matSgp = :mat', { mat: repasse.matOfertante })
-      .getOne();
-
-    let sgpReceptor: any = null;
-    if (repasse.receptor) {
-      const receptorMat = await this.userRepo.findOne({
-        where: { id: repasse.receptor.id },
-        select: { mat: true },
-      });
-      if (receptorMat) {
-        sgpReceptor = await this.dadosSgpRepo
-          .createQueryBuilder('sgp')
-          .select(['sgp.pgSgp', 'sgp.nomeGuerraSgp', 'sgp.situacaoSgp'])
-          .where('sgp.matSgp = :mat', { mat: receptorMat.mat })
-          .getOne();
-      }
-    }
-
-    return new ReturnRepasseDto(repasse, sgpOfertante, sgpReceptor);
+    const [dto] = await this.montarDtos([repasse]);
+    return dto;
   }
 
-  async findAll(): Promise<ReturnRepasseDto[]> {
-    const repasses = await this.repo.find({
-      relations: {
-        escala: { operacao: { evento: { ome: true } } },
-        ofertante: true,
-        receptor: true,
-        destinatario: true,
-      },
-      order: { createdAt: 'DESC' },
-    });
+  async findAll(usuarioLogado: {
+    id: number;
+    omeId: number;
+    typeUser: number;
+  }): Promise<ReturnRepasseDto[]> {
+    const tipo = Number(usuarioLogado.typeUser);
+    const ehMasterOuTecnico =
+      tipo === UserType.MASTER || tipo === UserType.TECNICO;
 
-    const dtos = await Promise.all(
-      repasses.map(async (r) => {
-        const sgpOfertante = await this.dadosSgpRepo
-          .createQueryBuilder('sgp')
-          .select(['sgp.pgSgp', 'sgp.nomeGuerraSgp', 'sgp.situacaoSgp'])
-          .where('sgp.matSgp = :mat', { mat: r.matOfertante })
-          .getOne();
+    const qb = this.repo
+      .createQueryBuilder('r')
+      .leftJoinAndSelect('r.escala', 'escala')
+      .leftJoinAndSelect('escala.operacao', 'operacao')
+      .leftJoinAndSelect('operacao.evento', 'evento')
+      .leftJoinAndSelect('evento.ome', 'ome')
+      .leftJoinAndSelect('r.ofertante', 'ofertante')
+      .leftJoinAndSelect('r.receptor', 'receptor')
+      .leftJoinAndSelect('r.destinatario', 'destinatario')
+      .orderBy('r.created_at', 'DESC')
+      .limit(100);
 
-        let sgpReceptor: any = null;
-        if (r.receptor) {
-          const receptorMat = await this.userRepo.findOne({
-            where: { id: r.receptor.id },
-            select: { mat: true },
-          });
-          if (receptorMat) {
-            sgpReceptor = await this.dadosSgpRepo
-              .createQueryBuilder('sgp')
-              .select(['sgp.pgSgp', 'sgp.nomeGuerraSgp', 'sgp.situacaoSgp'])
-              .where('sgp.matSgp = :mat', { mat: receptorMat.mat })
-              .getOne();
-          }
-        }
+    if (!ehMasterOuTecnico) {
+      qb.where(
+        `(r.ofertante_id = :userId
+          OR r.receptor_id = :userId
+          OR r.destinatario_id = :userId
+          OR evento.ome_id = :omeId)`,
+        { userId: usuarioLogado.id, omeId: usuarioLogado.omeId },
+      );
+    }
 
-        return new ReturnRepasseDto(r, sgpOfertante, sgpReceptor);
-      }),
-    );
-
-    return dtos;
+    return this.montarDtos(await qb.getMany());
   }
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -679,5 +653,71 @@ WHERE e.mat_escala = :mat
         `(data_inicio_repasse::text || ' ' || hora_inicio_repasse::text)::timestamp <= NOW()`,
       )
       .execute();
+  }
+
+  /**
+   * Busca em UMA query os dados de SGP (pg, nome de guerra, situação) de várias
+   * matrículas. Substitui o padrão "1 query por repasse" (N+1).
+   */
+  private async mapaSgpPorMatricula(
+    mats: string[],
+  ): Promise<Map<string, DadosSgpEntity>> {
+    const unicas = [...new Set(mats.filter(Boolean))];
+    const mapa = new Map<string, DadosSgpEntity>();
+    if (!unicas.length) return mapa;
+
+    const sgps = await this.dadosSgpRepo
+      .createQueryBuilder('sgp')
+      .select([
+        'sgp.matSgp',
+        'sgp.pgSgp',
+        'sgp.nomeGuerraSgp',
+        'sgp.situacaoSgp',
+      ])
+      .where('sgp.matSgp IN (:...mats)', { mats: unicas })
+      .getMany();
+
+    for (const s of sgps) mapa.set(s.matSgp, s);
+    return mapa;
+  }
+
+  /** Monta os DTOs de uma lista de repasses com 2 queries no total (não 3N). */
+  private async montarDtos(
+    repasses: RepasseEntity[],
+  ): Promise<ReturnRepasseDto[]> {
+    if (!repasses.length) return [];
+
+    // Matrícula do receptor: 1 query para todos os receptores da lista
+    const receptorIds = [
+      ...new Set(
+        repasses.map((r) => r.receptor?.id).filter((id): id is number => !!id),
+      ),
+    ];
+
+    const matPorReceptorId = new Map<number, string>();
+    if (receptorIds.length) {
+      const users = await this.userRepo
+        .createQueryBuilder('u')
+        .select(['u.id', 'u.mat'])
+        .where('u.id IN (:...ids)', { ids: receptorIds })
+        .getMany();
+      for (const u of users) matPorReceptorId.set(u.id, u.mat);
+    }
+
+    const sgpMap = await this.mapaSgpPorMatricula([
+      ...repasses.map((r) => r.matOfertante),
+      ...matPorReceptorId.values(),
+    ]);
+
+    return repasses.map((r) => {
+      const sgpOfertante = sgpMap.get(r.matOfertante) ?? null;
+      const matReceptor = r.receptor
+        ? matPorReceptorId.get(r.receptor.id)
+        : null;
+      const sgpReceptor = matReceptor
+        ? (sgpMap.get(matReceptor) ?? null)
+        : null;
+      return new ReturnRepasseDto(r, sgpOfertante, sgpReceptor);
+    });
   }
 }

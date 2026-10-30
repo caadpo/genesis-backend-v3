@@ -9,6 +9,7 @@ import { Evento } from 'src/evento/entities/evento.entity';
 import { OmeEntity } from 'src/ome/entities/ome.entity';
 import { UserEntity } from 'src/user/entities/user.entity';
 import { EscalaEntity } from 'src/escala/entities/escala.entity';
+import { OperacaoOmeCompartilhada } from './entities/operacao-ome-compartilhada.entity';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { EscalaEntity } from 'src/escala/entities/escala.entity';
       EscalaEntity,
       OmeEntity,
       UserEntity,
+      OperacaoOmeCompartilhada,
     ]),
   ],
   providers: [OperacaoService],

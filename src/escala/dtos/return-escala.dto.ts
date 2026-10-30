@@ -23,15 +23,15 @@ export interface NomesEscalaResolvidos {
 export class ReturnEscalaDto {
   id: number;
   sistema: string;
-  pg_escala: string;
-  mat_escala: string;
-  ng_escala: string;
+  pg_escala: string | null;
+  mat_escala: string | null;
+  ng_escala: string | null;
   tipo_escala: string;
-  cpf_escala: string;
-  nomecompleto_escala: string;
+  cpf_escala: string | null;
+  nomecompleto_escala: string | null;
   nomeome_escala: string;
-  nunfunc_escala: string;
-  nunvinc_escala: string;
+  nunfunc_escala: string | null;
+  nunvinc_escala: string | null;
   dataInicio: string;
   horaInicio: string;
   horaFim: string;
@@ -42,6 +42,12 @@ export class ReturnEscalaDto {
   anotacoes?: string;
   isRepasse: boolean;
   repasseOrigemId?: number | null;
+
+  isVagaAberta: boolean;
+  omeDestinoId: number | null;
+  omeDestinoNome: string | null;
+  preenchidaPorId: number | null;
+  preenchidaEm: Date | null;
 
   createdAt: Date;
   updatedAt: Date;
@@ -116,6 +122,13 @@ export class ReturnEscalaDto {
     this.anotacoes = e.anotacoes;
     this.isRepasse = e.isRepasse;
     this.repasseOrigemId = e.repasseOrigemId ?? null;
+
+    this.isVagaAberta = e.isVagaAberta ?? false;
+    this.omeDestinoId = e.omeDestinoId ?? null;
+    this.omeDestinoNome = e.omeDestino?.nomeOme ?? null;
+    this.preenchidaPorId = e.preenchidaPorId ?? null;
+    this.preenchidaEm = e.preenchidaEm ?? null;
+
     this.createdAt = e.createdAt;
     this.updatedAt = e.updatedAt;
     this.usuarioId = e.usuario?.id;

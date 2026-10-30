@@ -21,6 +21,12 @@ import { UserType } from 'src/user/enum/user-type.enum';
 import { EscalaService } from './escala.service';
 import { ConfirmarPresencaDto } from './dtos/confirmar-presenca.dto';
 
+import {
+  CreateVagaDto,
+  PreencherVagaDto,
+  SubstituirUsuarioDto,
+} from './dtos/vaga.dtos';
+
 import { UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -222,8 +228,71 @@ export class EscalaController {
     UserType.GESTOR_VERBA,
     UserType.COMUN,
   )
-  findMinhas(@Request() req: any) {
-    return this.service.findMinhasEscalas(req.user);
+  findMinhas(
+    @Request() req: any,
+    @Query('mes') mes?: string,
+    @Query('ano') ano?: string,
+  ) {
+    // mes e ano andam juntos: ou vêm os dois, ou nenhum (retorna tudo - legado)
+    if ((mes && !ano) || (!mes && ano)) {
+      throw new BadRequestException('Informe mes e ano juntos');
+    }
+
+    let mesNum: number | undefined;
+    let anoNum: number | undefined;
+
+    if (mes && ano) {
+      mesNum = Number(mes);
+      anoNum = Number(ano);
+
+      if (
+        !Number.isInteger(mesNum) ||
+        mesNum < 1 ||
+        mesNum > 12 ||
+        !Number.isInteger(anoNum) ||
+        anoNum < 2000 ||
+        anoNum > 2100
+      ) {
+        throw new BadRequestException('mes (1-12) ou ano inválido');
+      }
+    }
+
+    return this.service.findMinhasEscalas(req.user, mesNum, anoNum);
+  }
+
+  @Get('vagas')
+  @Roles(UserType.MASTER, UserType.TECNICO, UserType.AUXILIAR)
+  listarVagas(@Request() req: any, @Query('operacaoId') operacaoId?: string) {
+    return this.service.listarVagas(
+      req.user,
+      operacaoId ? Number(operacaoId) : undefined,
+    );
+  }
+
+  @Post('vaga')
+  @Roles(UserType.MASTER, UserType.TECNICO, UserType.AUXILIAR)
+  criarVaga(@Body() dto: CreateVagaDto, @Request() req: any) {
+    return this.service.criarVaga(dto, req.user);
+  }
+
+  @Patch(':id/preencher')
+  @Roles(UserType.MASTER, UserType.TECNICO, UserType.AUXILIAR)
+  preencherVaga(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: PreencherVagaDto,
+    @Request() req: any,
+  ) {
+    return this.service.preencherVaga(id, dto, req.user);
+  }
+
+  @Patch(':id/substituir')
+  @Roles(UserType.MASTER, UserType.TECNICO, UserType.AUXILIAR)
+  substituirUsuario(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SubstituirUsuarioDto,
+    @Request() req: any,
+  ) {
+    return this.service.substituirUsuario(id, dto, req.user);
   }
 
   @Get('usuario/:usuarioId')
@@ -234,6 +303,48 @@ export class EscalaController {
     @Request() req: any,
   ) {
     return this.service.findEscalasByUsuario(usuarioId, sistema, req.user);
+  }
+
+  // ── Colegas do mesmo serviço (mesma operação/data/horário/viatura) ───────────
+  @Get(':id/colegas')
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.AUXILIAR,
+    UserType.DIRETOR,
+    UserType.ESTRATEGICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.GESTOR_VERBA,
+    UserType.COMUN,
+  )
+  findColegas(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    return this.service.findColegas(id, req.user);
+  }
+
+  // ── Home: próximas escalas + membros do serviço (1 requisição) ───────────────
+  @Get('proximas')
+  @Roles(
+    UserType.MASTER,
+    UserType.TECNICO,
+    UserType.AUXILIAR,
+    UserType.DIRETOR,
+    UserType.ESTRATEGICO,
+    UserType.FINANCEIRO,
+    UserType.PD,
+    UserType.GESTOR_VERBA,
+    UserType.COMUN,
+  )
+  findProximas(
+    @Request() req: any,
+    @Query('hoje') hoje?: string,
+    @Query('limit') limit?: string,
+  ) {
+    if (hoje && !/^\d{4}-\d{2}-\d{2}$/.test(hoje)) {
+      throw new BadRequestException('hoje deve estar no formato AAAA-MM-DD');
+    }
+    const limite = Math.min(Math.max(Number(limit) || 2, 1), 10);
+    return this.service.findProximas(req.user, hoje, limite);
   }
 
   @Get(':id')

@@ -32,7 +32,7 @@ export class EventoController {
   @Patch(':id/status')
   @Roles(UserType.MASTER, UserType.TECNICO, UserType.AUXILIAR, UserType.PD)
   alterarStatus(
-    @Param('id') id: number,
+    @Param('id', ParseIntPipe) id: number,
     @Body('status') status: StatusEvento,
     @Req() req: any,
   ) {
@@ -50,8 +50,8 @@ export class EventoController {
     UserType.GESTOR_VERBA,
     UserType.PD,
   )
-  getResumoEscalas(@Param('id', ParseIntPipe) id: number) {
-    return this.service.getResumoEscalas(id);
+  getResumoEscalas(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.service.getResumoEscalas(id, req.user as UserEntity);
   }
 
   @Get(':id/pdf')
@@ -143,14 +143,30 @@ export class EventoController {
     @Query('omeId') omeId?: string,
     @Query('mes') mes?: string,
     @Query('ano') ano?: string,
+    @Query('incluirCompartilhadas') incluirCompartilhadas?: string,
     @Req() req?: any,
   ) {
+    const user = req?.user as UserEntity;
+    const incluir = incluirCompartilhadas === 'true';
+
+    // Ao pedir eventos compartilhados, o Auxiliar só consulta pela PRÓPRIA OME
+    // (vem do token). Assim ninguém descobre o que foi compartilhado com outra
+    // OME trocando o parâmetro. Sem o flag, o comportamento é exatamente o atual
+    // (a modal de filtro da tela de COP continua podendo escolher qualquer OME).
+    const omeFiltro =
+      incluir && Number(user?.typeUser) === UserType.AUXILIAR
+        ? Number(user.omeId)
+        : omeId
+          ? Number(omeId)
+          : undefined;
+
     return this.service.findAll(
       distribuicaoId ? Number(distribuicaoId) : undefined,
-      omeId ? Number(omeId) : undefined,
-      req?.user as UserEntity,
+      omeFiltro,
+      user,
       mes ? Number(mes) : undefined,
       ano ? Number(ano) : undefined,
+      incluir,
     );
   }
 

@@ -10,6 +10,7 @@ import { Evento } from 'src/evento/entities/evento.entity';
 import { DadosSgpEntity } from 'src/dadossgp/entities/dadossgp.entity'; // ✅ adicionar
 import { ViaturaEntity } from 'src/viatura/entities/viatura.entity';
 import { PagamentoEntity } from 'src/pagamento/entities/pagamento.entity';
+import { OperacaoOmeCompartilhada } from 'src/operacao/entities/operacao-ome-compartilhada.entity';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { PagamentoEntity } from 'src/pagamento/entities/pagamento.entity';
       DadosSgpEntity,
       ViaturaEntity,
       PagamentoEntity,
+      OperacaoOmeCompartilhada,
     ]),
   ],
   controllers: [EscalaController],

@@ -34,9 +34,12 @@ export class ReturnOperacaoComTotalCotasDto {
     totalCotas: number;
   }>;
 
+  omesCompartilhadas: Array<{ id: number; nomeOme: string }>;
+
   constructor(
     operacao: any,
     cotasPorTipo?: Array<{ tipo_escala: string; totalCotas: number }>,
+    omesCompartilhadas: Array<{ id: number; nomeOme: string }> = [],
   ) {
     this.id = operacao.id;
     this.evento = operacao.evento;
@@ -47,6 +50,7 @@ export class ReturnOperacaoComTotalCotasDto {
     this.cod_op = operacao.cod_op;
     this.created_at = operacao.created_at;
     this.updated_at = operacao.updated_at;
+    this.omesCompartilhadas = omesCompartilhadas;
 
     this.cotasPorTipo = cotasPorTipo || [];
     this.totalCotasOficiais =
